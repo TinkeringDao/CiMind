@@ -1,0 +1,37 @@
+# CiMind Reference Zero-Camera Room Presence, Circadian Lux & IR Appliance Node (ESPHome)
+esphome:
+  name: cimind-room-node
+  friendly_name: "CiMind Zero-Camera Room Care Node"
+
+esp32:
+  board: esp32-c6-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+
+i2c:
+  sda: GPIO6
+  scl: GPIO7
+  scan: true
+
+sensor:
+  - platform: bh1750
+    name: "Room Circadian Illuminance"
+    address: 0x23
+    update_interval: 15s
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO4
+      mode:
+        input: true
+        pullup: false
+    name: "Room PaPIRs Wake Motion"
+    device_class: motion
+
+remote_transmitter:
+  pin: GPIO5
+  carrier_duty_percent: 33%

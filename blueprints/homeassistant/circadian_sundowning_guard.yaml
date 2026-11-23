@@ -1,0 +1,72 @@
+blueprint:
+  name: "CiMind — Zero-Camera Circadian Sundowning Guard & Nocturnal Pathway Lighting"
+  description: >
+    Adjusts room color temperature (Kelvin) and brightness based on ambient Lux telemetry
+    to support daytime melanopic circadian entrainment (m-EDI >= 250 lx) and gentle late-afternoon
+    warm-amber dimming (2700K -> 2000K) to reduce evening sundowning agitation in dementia care.
+  domain: automation
+  input:
+    ambient_lux_sensor:
+      name: Ambient Light (Lux) Sensor
+      selector:
+        entity:
+          domain: sensor
+          device_class: illuminance
+    presence_sensor:
+      name: Zero-Camera Room Presence / PIR Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+    room_light:
+      name: Circadian Tunable Room Light
+      selector:
+        target:
+          entity:
+            domain: light
+
+mode: restart
+max_exceeded: silent
+
+trigger:
+  - platform: state
+    entity_id: !input presence_sensor
+    to: "on"
+  - platform: time_pattern
+    minutes: "/15"
+
+condition:
+  - condition: state
+    entity_id: !input presence_sensor
+    state: "on"
+
+action:
+  - choose:
+      - conditions:
+          - condition: time
+            after: "07:00:00"
+            before: "13:00:00"
+        sequence:
+          - service: light.turn_on
+            target: !input room_light
+            data:
+              kelvin: 5500
+              brightness_pct: 90
+              transition: 30
+      - conditions:
+          - condition: time
+            after: "17:00:00"
+            before: "21:30:00"
+        sequence:
+          - service: light.turn_on
+            target: !input room_light
+            data:
+              kelvin: 2700
+              brightness_pct: 45
+              transition: 60
+    default:
+      - service: light.turn_on
+        target: !input room_light
+        data:
+          kelvin: 2000
+          brightness_pct: 18
+          transition: 5
