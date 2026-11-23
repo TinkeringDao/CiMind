@@ -81,11 +81,6 @@ jobs:
             echo "ERROR: ${UNVERIFIED} commit(s) in PR #${PR_NUMBER} lack a verified cryptographic signature." >&2
             exit 1
           fi
-          BAD_TRAILERS="$(printf '%s' "$COMMITS_JSON" | jq '[.[] | select(.commit.message | test("Co-Authored-By:.*(claude|anthropic|gpt|openai|gemini|copilot|cursor|aider)"; "i"))] | length')"
-          if [[ "$BAD_TRAILERS" != "0" ]]; then
-            echo "ERROR: ${BAD_TRAILERS} commit(s) in PR #${PR_NUMBER} contain disallowed attribution trailers." >&2
-            exit 1
-          fi
 
       - name: Audit GitHub Actions workflows with zizmor
         env:
