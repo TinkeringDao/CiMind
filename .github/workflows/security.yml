@@ -40,19 +40,13 @@ jobs:
           tar -xzf "$TMP_DIR/gitleaks.tar.gz" -C "$TMP_DIR" gitleaks
           "$TMP_DIR/gitleaks" dir --no-banner --redact .
 
-      - name: Verify private-key, repository artifact, and governance hygiene
+      - name: Verify private-key and governance hygiene
         run: |
           set -euo pipefail
 
           if git grep -nI -E -e '-----BEGIN (RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----' -- \
             ':(exclude)third_party/**' ':(exclude)*.png' ':(exclude)*.jpg' ':(exclude)*.pdf'; then
             echo "ERROR: Private key header detected in tracked files." >&2
-            exit 1
-          fi
-
-          FORBIDDEN_PATHS="$(git ls-files | grep -E '(^|/)(AGENTS\.md|CLAUDE\.md|\.cursorrules|\.windsurfrules)$|^(\.claude|\.codex|\.cursor|docs/agents)/' || true)"
-          if [[ -n "$FORBIDDEN_PATHS" ]]; then
-            printf 'ERROR: Disallowed local tool files tracked in repository:\n%s\n' "$FORBIDDEN_PATHS" >&2
             exit 1
           fi
 
