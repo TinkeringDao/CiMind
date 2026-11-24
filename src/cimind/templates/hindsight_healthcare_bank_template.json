@@ -1,0 +1,225 @@
+{
+  "version": "1",
+  "bank": {
+    "retain_mission": "Extract cryptographically verified caregiver or clinician facts, life-history anchors (childhood L1 language, Ikigai role-reversal domains, daily comfort routines, and bereavement exclusions), and hardware-provenanced daily care episodes (confidence >= 0.90) with explicit UTC timestamps and sensor provenance. Preserve epistemic provenance tags so unverified patient utterances (epistemic_truth:false) are never promoted to clinical or medication ground truth. Ignore television/radio broadcast dialogue and transient room noise.",
+    "reflect_mission": "Support local-first aging-in-place and mild-to-advanced cognitive care coordination (Reisberg GDS 1-7) strictly within the non-medical-device research boundary (Regulation (EU) 2017/745 Art. 2(1), MDCG 2019-11 Rev. 1). Keep verified caregiver and >= 0.90-confidence sensor records strictly separated from unverified patient expressions, state unobserved sensor modalities explicitly instead of assuming normal baselines, avoid reality-orientation quizzes or bereavement confrontation in GDS 5-6, suppress autonomous oral food/drink/pill prompts under GDS 7 or dysphagia flags, and present longitudinal routine shifts exclusively as non-prescriptive observational summaries for human caregiver and physician review.",
+    "retain_extraction_mode": "concise",
+    "enable_observations": true,
+    "observations_mission": "Consolidate stable biographical preferences, childhood L1 and acquired L2 communication patterns, comforting rituals, and multi-day routine or circadian rhythm observations while preventing unverified patient utterances from merging into verified clinical or hardware-sensor observations.",
+    "enable_text_search": true,
+    "enable_temporal_retrieval": true,
+    "enable_graph_retrieval": true,
+    "enable_reranking": true,
+    "audit_log_enabled": true,
+    "disposition_empathy": 5,
+    "disposition_literalism": 5,
+    "disposition_skepticism": 5,
+    "default_observation_scopes": "per_tag",
+    "consolidation_strategies": [
+      {
+        "scopes": [
+          {
+            "tags": [
+              "epistemic:zone4_quarantine"
+            ],
+            "tags_match": "all"
+          }
+        ],
+        "observations_mission": "Track recurring emotional themes, comforting reminiscence topics, and L1/L2 word-finding patterns inside quarantined patient utterances without promoting claims to verified medication or clinical facts.",
+        "max_observations_per_scope": 32
+      },
+      {
+        "scopes": [
+          {
+            "tags": [
+              "epistemic:zone3_sensor"
+            ],
+            "tags_match": "all"
+          }
+        ],
+        "observations_mission": "Summarize recurring daily care episode timings, room transitions, hydration/meal routines, and multi-day observational shifts backed by >= 0.90 hardware sensor provenance.",
+        "max_observations_per_scope": 64
+      }
+    ],
+    "entity_labels": [
+      {
+        "key": "epistemic_zone",
+        "description": "CiMind four-zone epistemic provenance boundary",
+        "type": "value",
+        "optional": true,
+        "tag": false,
+        "values": [
+          {
+            "value": "clinical_vault",
+            "description": "Cryptographically signed caregiver or clinician record"
+          },
+          {
+            "value": "verified_biography",
+            "description": "Signed life history, Ikigai domain, or bereavement exclusion"
+          },
+          {
+            "value": "sensor_episode",
+            "description": "Hardware-provenanced episodic event with confidence >= 0.90"
+          },
+          {
+            "value": "patient_quarantine",
+            "description": "Unverified patient utterance fenced from clinical ground truth"
+          }
+        ]
+      },
+      {
+        "key": "care_domain",
+        "description": "Observational aging-in-place care coordination domain",
+        "type": "value",
+        "optional": true,
+        "tag": false,
+        "values": [
+          {
+            "value": "medication_schedule",
+            "description": "Scheduled medication routine observation"
+          },
+          {
+            "value": "circadian_sleep",
+            "description": "Sleep continuity, nocturia, or rest-activity rhythm observation"
+          },
+          {
+            "value": "hydration_nutrition",
+            "description": "Hydration or meal routine observation"
+          },
+          {
+            "value": "mobility_perimeter",
+            "description": "Post-rise transfer, indoor room transition, or perimeter event"
+          },
+          {
+            "value": "biography_ikigai",
+            "description": "Life story, childhood L1 language, or Ikigai role-reversal topic"
+          }
+        ]
+      }
+    ],
+    "entities_allow_free_form": true
+  },
+  "mental_models": [
+    {
+      "id": "verified-biography-and-communication",
+      "name": "Verified Biography & L1 Communication Profile",
+      "source_query": "What verified biographical facts, childhood mother-tongue (L1) and secondary (L2) communication preferences, Ikigai role-reversal interests, sensory adaptations, and bereavement exclusions are documented for this household?",
+      "max_tokens": 2048,
+      "trigger": {
+        "refresh_after_consolidation": true,
+        "fact_types": [
+          "world",
+          "observation"
+        ],
+        "tag_groups": [
+          {
+            "not": {
+              "tags": [
+                "epistemic:zone4_quarantine",
+                "epistemic_truth:false"
+              ],
+              "match": "any_strict"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "daily-routine-and-episodic-continuity",
+      "name": "Daily Routine & Hardware-Verified Continuity",
+      "source_query": "What verified daily routines, recent hardware-provenanced care episodes, circadian sleep/wake transitions, and hydration or meal timings have been observed, and which sensor modalities were offline or unobserved?",
+      "max_tokens": 2048,
+      "trigger": {
+        "refresh_after_consolidation": true,
+        "fact_types": [
+          "world",
+          "experience",
+          "observation"
+        ],
+        "tag_groups": [
+          {
+            "not": {
+              "tags": [
+                "epistemic:zone4_quarantine",
+                "epistemic_truth:false"
+              ],
+              "match": "any_strict"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "caregiver-handover-digest",
+      "name": "Non-Prescriptive Caregiver Handover Summary",
+      "source_query": "Summarize recent observational routine shifts, evening sundowning or nocturnal bathroom patterns, and care-coordination follow-ups in non-prescriptive language for human caregiver and clinician handover.",
+      "max_tokens": 1536,
+      "trigger": {
+        "refresh_after_consolidation": true,
+        "fact_types": [
+          "world",
+          "experience",
+          "observation"
+        ],
+        "tag_groups": [
+          {
+            "not": {
+              "tags": [
+                "epistemic:zone4_quarantine",
+                "epistemic_truth:false"
+              ],
+              "match": "any_strict"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "directives": [
+    {
+      "name": "Non-MDSW Observational Scope Boundary",
+      "content": "Operate strictly as a non-medical-device assistive research and caregiver-coordination memory layer (Regulation (EU) 2017/745 Art. 2(1), MDCG 2019-11 Rev. 1). Never diagnose disease, prescribe or adjust medication dosages, or issue autonomous clinical directives; frame all longitudinal routine findings as non-prescriptive observational notes for human caregiver and physician review.",
+      "priority": 100,
+      "is_active": true,
+      "tags": [
+        "cimind:governance"
+      ]
+    },
+    {
+      "name": "Epistemic Quarantine Against Confabulation",
+      "content": "Treat memories tagged epistemic:zone4_quarantine or epistemic_truth:false strictly as unverified patient expressions. Never use unverified utterances to confirm medication intake, alter allergy or prescription state, or override hardware-provenanced episodes.",
+      "priority": 95,
+      "is_active": true,
+      "tags": [
+        "cimind:epistemic-firewall"
+      ]
+    },
+    {
+      "name": "Explicit Unobserved Sensor Modalities",
+      "content": "Assign zero evidentiary weight to offline or contraindicated sensor modalities (such as smart-ring PPG under peripheral edema); state unobserved modalities explicitly rather than assuming normal vitals or routine completion.",
+      "priority": 90,
+      "is_active": true,
+      "tags": [
+        "cimind:observability"
+      ]
+    },
+    {
+      "name": "Zero-Quiz Integrative Validation & L1 Continuity",
+      "content": "Avoid reality-orientation memory quizzes and bereavement confrontation in moderate-to-severe cognitive impairment (Reisberg GDS 5-6); ground responses in emotional validation, comforting biographical anchors, and childhood mother-tongue (L1) continuity.",
+      "priority": 85,
+      "is_active": true,
+      "tags": [
+        "cimind:dialogue-safety"
+      ]
+    },
+    {
+      "name": "Dysphagia & Neuroleptic Sensitivity Guardrails",
+      "content": "Never generate autonomous food, drink, or oral pill intake prompts when GDS 7 or dysphagia flags apply, and treat D2-antagonist antipsychotic sensitivity in Lewy Body profiles strictly as an observational clinician-review alert.",
+      "priority": 80,
+      "is_active": true,
+      "tags": [
+        "cimind:clinical-safety"
+      ]
+    }
+  ]
+}

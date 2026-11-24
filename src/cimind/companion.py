@@ -9,6 +9,8 @@ from dataclasses import dataclass, replace
 from typing import Literal, Protocol
 
 from cimind.domain import (
+    BEREAVEMENT_TERMS,
+    ORAL_INTAKE_TERMS,
     CareGraphAlertEffect,
     CareRole,
     EmbodiedPromptEffect,
@@ -19,6 +21,7 @@ from cimind.domain import (
     PictogramCard,
     TherapeuticMode,
     VerifiedEffect,
+    contains_clinical_term,
 )
 from cimind.mmu import CommerceSpendRecord, EpistemicContextBundle, EpistemicMemoryMMU
 from cimind.policy import ActionTier
@@ -52,31 +55,8 @@ RitualTrigger = Literal[
     "VESTIBULE_REDIRECT",
 ]
 
-_BEREAVEMENT_TERMS: tuple[str, ...] = (
-    "passed away",
-    "no longer alive",
-    "is dead",
-    "was buried",
-    "funeral",
-    "deceased",
-    "died",
-    "dead",
-)
-
-_ORAL_INTAKE_TERMS: tuple[str, ...] = (
-    "drink",
-    "water",
-    "soup",
-    "eat",
-    "tea",
-    "juice",
-    "coffee",
-    "sip",
-    "swallow",
-    "snack",
-    "food",
-    "beverage",
-)
+_BEREAVEMENT_TERMS = BEREAVEMENT_TERMS
+_ORAL_INTAKE_TERMS = ORAL_INTAKE_TERMS
 
 _APPLIANCE_OR_FETCH_CUES: tuple[str, ...] = (
     "turn off",
@@ -297,9 +277,7 @@ def _scrub_interrogatives(text: str) -> str:
     return text.replace("?", ".").strip()
 
 
-def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
-    lowered = text.lower()
-    return any(re.search(rf"\b{re.escape(t)}\b", lowered) is not None for t in terms)
+_contains_any_term = contains_clinical_term
 
 
 def _referenced_deceased(utterance: str, exclusions: frozenset[str]) -> str | None:

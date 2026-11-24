@@ -26,6 +26,7 @@ from cimind.domain import (
     CareGraphMember,
     CareRole,
     EmbodiedPromptEffect,
+    EpistemicProvenance,
     EpistemicViolationError,
     EpistemicZone,
     GdsStage,
@@ -57,7 +58,11 @@ from cimind.hindsight import (
     CareEpisodicEvent,
     HindsightMemoryBank,
     TemporalVerificationResult,
+    healthcare_bank_template_path,
+    load_healthcare_bank_template,
+    validate_bank_template_manifest,
 )
+from cimind.hindsight_validator import CiMindOperationValidator
 from cimind.mmu import (
     CommerceSpendRecord,
     DiarizedSpeechObservation,
@@ -115,6 +120,7 @@ __all__ = [
     "CareRole",
     "CatalogItem",
     "CiMindAppliance",
+    "CiMindOperationValidator",
     "CircadianTarget",
     "ClinicalSentinelCron",
     "CommerceSpendRecord",
@@ -131,6 +137,7 @@ __all__ = [
     "EmbodiedPromptEffect",
     "EpistemicContextBundle",
     "EpistemicMemoryMMU",
+    "EpistemicProvenance",
     "EpistemicViolationError",
     "EpistemicZone",
     "FallEscalationStage",
@@ -185,10 +192,13 @@ __all__ = [
     "evaluate_geofence_telemetry",
     "evaluate_window",
     "haversine_meters",
+    "healthcare_bank_template_path",
+    "load_healthcare_bank_template",
     "parse_iso_utc",
     "parse_lorawan_uplink",
     "process_lorawan_geotrigger",
     "step_reflex",
+    "validate_bank_template_manifest",
 ]
 
 __version__ = "0.2.0"

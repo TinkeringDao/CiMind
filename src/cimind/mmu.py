@@ -15,6 +15,7 @@ from typing import Any, Literal, Protocol
 from cimind.audit import AuditEntry, AuditLedger, AuditVerificationReport
 from cimind.domain import (
     GERIATRIC_DRUG_CATALOG,
+    EpistemicProvenance,
     EpistemicViolationError,
     EpistemicZone,
     PathologyFlag,
@@ -22,6 +23,7 @@ from cimind.domain import (
     StorageIntegrityError,
     UnobservedModalitiesHeader,
     parse_iso_utc,
+    passes_broadcast_speech_quarantine,
 )
 from cimind.hindsight import CareEpisodicEvent, TemporalVerificationResult
 
@@ -179,9 +181,9 @@ class EpistemicContextBundle:
 class EpistemicMemoryMMU:
     """Hardware-inspired 4-Zone Epistemic Memory MMU backed by SQLite/SQLCipher and Hindsight."""
 
-    BANK_VERIFIED_BIO = "cimind_verified_bio"
-    BANK_SENSOR_EPISODES = "cimind_sensor_episodes"
-    BANK_PATIENT_QUARANTINE = "cimind_patient_utterances"
+    BANK_VERIFIED_BIO = EpistemicProvenance.BANK_VERIFIED_BIO.value
+    BANK_SENSOR_EPISODES = EpistemicProvenance.BANK_SENSOR_EPISODES.value
+    BANK_PATIENT_QUARANTINE = EpistemicProvenance.BANK_PATIENT_QUARANTINE.value
 
     def __init__(
         self,
@@ -470,14 +472,13 @@ class EpistemicMemoryMMU:
             return "RETAINED_SENSOR_EPISODE"
 
         # 4-Gate Broadcast & Noise Quarantine for DiarizedSpeechObservation:
-        # Gate 1: VAD speech presence; Gate 2: SNR >= 3 dB;
-        # Gate 3: non-broadcast speaker role; Gate 4: near-to-far >= 12 dB when TV/radio active.
-        if (
-            not observation.voice_activity_detected
-            or not observation.transcript.strip()
-            or observation.snr_db < 3.0
-            or observation.speaker_role == "BROADCAST_MEDIA"
-            or (observation.tv_or_radio_active and observation.near_to_far_field_db < 12.0)
+        if not passes_broadcast_speech_quarantine(
+            voice_activity_detected=observation.voice_activity_detected,
+            transcript=observation.transcript,
+            snr_db=observation.snr_db,
+            speaker_role=observation.speaker_role,
+            tv_or_radio_active=observation.tv_or_radio_active,
+            near_to_far_field_db=observation.near_to_far_field_db,
         ):
             self._ledger.append(
                 actor_id="cimind-audio-gate",
@@ -687,9 +688,9 @@ class EpistemicMemoryMMU:
             snippets.append(raw_txt)
         snippets = snippets[-5:]
         fenced_xml = (
-            '<unverified_patient_expressions epistemic_truth="false">\n'
+            f"{EpistemicProvenance.QUARANTINE_XML_OPEN.value}\n"
             + "\n".join(snippets)
-            + "\n</unverified_patient_expressions>"
+            + f"\n{EpistemicProvenance.QUARANTINE_XML_CLOSE.value}"
         )
 
         offline = tuple(
