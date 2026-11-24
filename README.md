@@ -1,128 +1,232 @@
-# CiMind (`TinkeringDao/CiMind`)
+# CiMind
 
 [![CI](https://github.com/TinkeringDao/CiMind/actions/workflows/ci.yml/badge.svg)](https://github.com/TinkeringDao/CiMind/actions/workflows/ci.yml)
 [![Security](https://github.com/TinkeringDao/CiMind/actions/workflows/security.yml/badge.svg)](https://github.com/TinkeringDao/CiMind/actions/workflows/security.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-**Organization:** **TinkeringDao Labs** (`https://tinkeringdao.dev`)  
-**Contact:** `hello@tinkeringdao.dev`  
-**License:** `Apache-2.0`
+Local-first, zero-cloud, auditable cognitive prosthetic and ambient-safety kernel for dementia and mild cognitive impairment (MCI) assistive-living research across Reisberg functional stages (`GDS 1–7`).
+
+`CiMind` (`TinkeringDao Labs` — `https://tinkeringdao.dev`) treats any local language model strictly as an untrusted reasoning coprocessor behind deterministic Python verification seams. Life-safety reflexes, epistemic memory boundaries, stage-adaptive dialogue rules, commerce velocity caps, and longitudinal clinical baselines execute in pure, offline-verifiable Python (`3.11+` standard library only; zero third-party runtime dependencies) backed by an append-only SHA-256 hash-chained SQLite audit ledger.
 
 ---
 
-## 1. Overview
+## Core Design Invariants
 
-**`CiMind`** (*Cognitive & Companion Intelligence Mind*) is a local-first, auditable episodic-memory, deterministic policy-gate, and ambient care kernel designed for assistive smart-home research supporting people living with mild cognitive impairment (MCI), dementia, or Alzheimer's disease.
-
-Unlike cloud voice assistants that stream intimate audio to remote servers and remain stateless across turns, `CiMind` treats any local language model strictly as an untrusted reasoning coprocessor behind deterministic verification gates:
-
-1. **Tamper-evident episodic auditability:** Every sensory event, memory write, prompt, Home Assistant action, purchase request, and escalation is recorded in an append-only SHA-256 hash-chained SQLite ledger (`src/cimind/audit.py`).
-2. **Temporal memory verification before confirmation:** Daily care events (such as morning medication intake) are retained and queried against a self-hosted [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) memory bank with strict `[window_start_utc, window_end_utc]` and confidence (`>= 0.90`) verification (`src/cimind/hindsight.py`).
-3. **Deterministic 3-tier action policy engine:** Routine comfort actions execute locally, bounded commerce requires merchant allowlists and transaction caps, and clinical or safety escalations require verified sensor or graph provenance (`src/cimind/policy.py`).
-4. **Zero-camera ambient room safety, circadian lighting & LoRaWAN wandering geofence:** Computes melanopic Equivalent Daylight Illuminance (`EDI`) targets across daytime, evening sundowning, and nocturnal bed-exit windows (`src/cimind/circadian.py`), and evaluates 868/915 MHz LoRaWAN wearable GNSS telemetry (`RAKwireless WisBlock RAK4631` / `WisGate` / `wadamesh`) with HDOP multipath filtering, 3-zone hysteresis, and **Pollen Robotics Reachy Mini** orientation cues (`src/cimind/geotrigger.py`).
+| Assistive-Care Failure Mode | Deterministic `CiMind` Guardrail | Module |
+| :--- | :--- | :--- |
+| Confabulated medication claims, TV dialogue bleed, or phantom sensor assumptions | Four isolated epistemic zones (`ClinicalVault`, `VerifiedBiography`, `SensorEpisodeBank`, `PatientUtteranceQuarantine`), 4-gate VAD/SNR/near-field broadcast filter, and explicit `UnobservedModalitiesHeader` | [`src/cimind/mmu.py`](src/cimind/mmu.py) |
+| NPU/LLM inference stalls on fall detection, nighttime wandering, or perimeter locks | Pure `< 5 ms`, zero-I/O reducer evaluating camera-free `2-of-3` floor fusion (`60 GHz mmWave` + `32x24` thermal + `15 cm dToF`/piezo), `590 nm` bed-exit strip, `0V` fail-safe geolock cutouts, and 4-state `BLE/UWB -> LoRaWAN GNSS` handover | [`src/cimind/reflex.py`](src/cimind/reflex.py) |
+| Reality-orientation quizzes, bereavement re-traumatization, `L2` attrition, or impulsive purchases | Stage-governed `TherapeuticMode` (`PeerCoPilot` -> `GuidedConcierge` -> 3-step `IntegrativeValidation` -> dysphagia-safe `SensoryPalliative`), intra-turn `L2 -> L1` mother-tongue pivot, `>= 40%` `Ikigai` role-reversal quota, seated `GDS <= 3` `Cognicise`, and velocity-capped 3-card `Co-Agency Concierge` | [`src/cimind/companion.py`](src/cimind/companion.py) |
+| Afebrile UTIs, prescribing cascades (`ChEI -> antimuscarinic`), or single-sensor alarm fatigue | `21`-day intra-patient `Median/MAD` (`\|z\| >= 2.5`) `>= 2`-plane concordance, Interrupted Time-Series `Iatrogenic Drift Sentinel` (`PV-1..PV-6`), `COAST-6` human-only social scoring, `t-HELP` 14-day delirium shield, and `<= 2/day` routine digest cap | [`src/cimind/sentinel.py`](src/cimind/sentinel.py) |
 
 ---
 
-## 2. Quickstart & Local Verification
+## Star-Topology Architecture
 
-Requires Python 3.11+ and [`uv`](https://docs.astral.sh/uv/) (zero third-party runtime dependencies; Python standard library only):
+All four domain modules share canonical immutable types in [`src/cimind/domain.py`](src/cimind/domain.py) and communicate strictly through [`CiMindAppliance`](src/cimind/appliance.py) with zero sibling-to-sibling imports:
 
-```bash
+```mermaid
+flowchart TD
+    Appliance["CiMindAppliance (src/cimind/appliance.py)<br/>Routes real-time frames, speech turns, concierge actions & cron windows"]
+    Reflex["SafetyReflexEngine (src/cimind/reflex.py)<br/>Pure &lt;5ms zero-I/O safety &amp; egress reducer"]
+    Companion["CompanionAndConcierge (src/cimind/companion.py)<br/>GDS 1-7 dialogue, L2-&gt;L1 pivot &amp; 3-card concierge"]
+    Sentinel["ClinicalSentinelCron (src/cimind/sentinel.py)<br/>21d Median/MAD concordance, PV-1..PV-6 &amp; COAST-6"]
+    MMU["EpistemicMemoryMMU + AuditLedger (src/cimind/mmu.py, audit.py)<br/>Zones 1-4 SQLite/SQLCipher + Hindsight banks + SHA-256 chain"]
+
+    Appliance --> Reflex
+    Appliance --> Companion
+    Appliance --> Sentinel
+    Appliance --> MMU
+    Companion --> MMU
+```
+
+### Four-Zone Epistemic Memory Firewall (`EpistemicMemoryMMU`)
+
+| Zone | Backing Store | Write Authority | Retrieval Contract |
+| :--- | :--- | :--- | :--- |
+| `Zone 1` (`ClinicalVault`) | Local SQLite / SQLCipher (`PRAGMA key`) | Cryptographically signed caregiver or clinician `SignedMutation` only | Bi-temporal supersession (`valid_from_utc`, `superseded_at_utc`), catalog-backed `DLB`/`ACB >= 3` Rx screening, and durable `24h/7d` EUR + order-count ledger |
+| `Zone 2` (`VerifiedBiography`) | SQLite + `cimind_verified_bio` bank | Cryptographically signed family or clinician `SignedMutation` | Verified life history, `Ikigai` domains, and `bereavement_exclusions` |
+| `Zone 3` (`SensorEpisodeBank`) | [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) (`cimind_sensor_episodes`) | Hardware telemetry with `confidence >= 0.90` | Deterministic `[window_start_utc, window_end_utc]` verification (`verify_episode_in_window`) preventing yesterday/today conflation |
+| `Zone 4` (`PatientUtteranceQuarantine`) | `cimind_patient_utterances` bank | Multi-speaker diarized audio passing all 4 broadcast/VAD/SNR/near-field gates | `PATIENT` speech injected strictly inside `<unverified_patient_expressions epistemic_truth="false">`; never mutates `Zone 1` or `Zone 3` |
+
+---
+
+## Stage & Subtype Adaptation Matrix
+
+| Stage / Pathology | Enforced Runtime Posture | Key Safety & Interaction Rules |
+| :--- | :--- | :--- |
+| `GDS 1–3` (`PeerCoPilot`) | Collaborative memory prosthetic | Compensatory `L1` noun code-switching exempted from drift alarms; afternoon (`12:00–15:00`) seated dual-task `Cognicise` enabled; `Mode A` autonomous micro-gifting (`<= 35 EUR`) within `24h/7d` velocity caps |
+| `GDS 4` (`GuidedConcierge`) | Linear step-by-step scaffolding | Single-step instructions; room-grounded 3-card `PictogramCard` (`>= 7:1` contrast) paraphasic object disambiguation; `LucidityWindow` session deferral |
+| `GDS 5–6` (`IntegrativeValidation`) | Zero-quiz emotional validation | Automatic intra-turn pivot to childhood `mother_tongue_l1` on comprehension/pause breakdown; interrogative (`?`) and bereavement-term scrubbing; `Mode B` remote diaspora cryptographic co-sign required for fulfillment |
+| `GDS 7` (`SensoryPalliative`) | Non-verbal comfort & dysphagia safety | All oral food/drink/tea prompts hard-blocked (`oral_prompt_blocked=True`); concierge purchasing disabled; calming familiar prosody and music cues only |
+| `LewyBody` | Visual-hallucination & neuroleptic guard | `D2`-antagonist antipsychotics flagged at `ClinicalVault` intake (`DLB_D2_ANTAGONIST_CONTRAINDICATED`); companion actuators freeze (`motor_frozen=True`, `pre_speech_gaze_lead_ms=0`) in dark rooms or nocturnal hours |
+| `BehavioralFTD` | Hyperorality & financial guard | Food, confectionery, chemical, and pica-risk SKU categories hard-blocked in `Co-Agency Concierge` (`RULE_BVFTD_HYPERORALITY_SKU_BLOCKED`) |
+| `DualSensoryLoss` | Presbycusis & low-vision adaptation | Slowed speech rate (`115–118 WPM`), `+4.5–5.0 dB` consonant shelf boost, extended `3,500 ms` VAD patience, and `>= 7:1` contrast visual cards |
+
+---
+
+## Quickstart
+
+Requires Python `3.11+` and [`uv`](https://docs.astral.sh/uv/):
+
+```sh
+git clone https://github.com/TinkeringDao/CiMind.git
+cd CiMind
 uv sync --locked
+
+# Self-test audit chain, circadian solver, 3-tier policy gate, reflex, sentinel, and concierge
 uv run cimind doctor
+
+# Individual offline subsystem simulations
 uv run cimind circadian --hour 9 --lux 120 --kelvin 4000
+uv run cimind reflex --hour 2 --bed-exit
+uv run cimind sentinel --simulate-afebrile-uti
+uv run cimind concierge --gds-stage 3 --amount-eur 24.0
 uv run cimind geotrigger --lat 48.138500 --lon 11.576000 --node-id rak4631-01 --sos
 ```
 
-Run the full local verification suite:
+### Python API Example
 
-```bash
+```python
+import hashlib
+import hmac
+
+from cimind import (
+    CareGraphMember,
+    CareRole,
+    CiMindAppliance,
+    DailyRollup,
+    EpistemicZone,
+    GdsStage,
+    PathologyFlag,
+    PatientCareProfile,
+    ReflexFrame,
+    SignedMutation,
+    TurnInput,
+)
+
+secret = b"household-signing-secret"
+appliance = CiMindAppliance(
+    db_path=":memory:",
+    enrolled_actor_secrets={"clinician-01": secret},
+    care_graph=(CareGraphMember("spouse-01", CareRole.CO_RESIDENT_HANDS_ON, "ml-IN"),),
+)
+
+profile = PatientCareProfile(
+    patient_id="patient-01",
+    gds_stage=GdsStage.GDS_5,
+    pathologies=frozenset({PathologyFlag.ALZHEIMER, PathologyFlag.DUAL_SENSORY_LOSS}),
+    mother_tongue_l1="ml-IN",
+    acquired_languages_l2=("en-IN", "de-DE"),
+    deceased_relatives=frozenset({"Amma"}),
+)
+payload = profile.to_dict()
+ts = "2026-11-01T08:00:00Z"
+sig = hmac.new(
+    secret,
+    SignedMutation.build_canonical_bytes(
+        zone=EpistemicZone.CLINICAL_VAULT,
+        category="CARE_PROFILE",
+        payload=payload,
+        valid_from_utc=ts,
+    ),
+    hashlib.sha256,
+).hexdigest()
+
+appliance.mmu.commit_signed(
+    SignedMutation(
+        actor_id="clinician-01",
+        zone=EpistemicZone.CLINICAL_VAULT,
+        category="CARE_PROFILE",
+        payload=payload,
+        valid_from_utc=ts,
+        signature_hex=sig,
+    )
+)
+
+# 1. Sub-5ms vestibule safety reflex (12V fail-safe geolock + warm L1 tea redirect)
+reflex_out = appliance.process_reflex_frame(
+    ReflexFrame(
+        timestamp_utc="2026-11-24T02:15:00Z",
+        hour_local=2,
+        room="vestibule",
+        patient_vestibule_distance_m=1.1,
+        smoke_co_nc_loop_closed=True,
+    )
+)
+assert reflex_out.ambient_effect.fail_safe_strike_energized is True
+
+# 2. Bereavement-safe 3-step Integrative Validation turn in childhood L1
+turn_out = appliance.process_companion_turn(
+    TurnInput(utterance="When is Amma coming home?", detected_language="ml-IN", local_hour=17),
+    now_utc="2026-11-24T17:00:00Z",
+)
+assert "?" not in turn_out.prompt_effect.spoken_text
+
+# 3. 21-day Median/MAD sentinel catching concordant afebrile UTI + t-HELP delirium shield
+baseline = [
+    DailyRollup(
+        day_iso=f"2026-11-{d:02d}",
+        nocturia_trips=1,
+        skin_temp_delta_c=0.0,
+        nocturnal_rmssd_ms=34.0,
+    )
+    for d in range(1, 22)
+]
+today = DailyRollup(
+    day_iso="2026-11-22",
+    nocturia_trips=5,
+    skin_temp_delta_c=-0.75,
+    nocturnal_rmssd_ms=18.0,
+)
+report = appliance.run_sentinel_window([*baseline, today], now_utc="2026-11-22T08:00:00Z")
+assert report.delirium_shield_active is True
+assert appliance.mmu.verify_chain().valid is True
+appliance.close()
+```
+
+---
+
+## Repository Layout & Adapter Seams
+
+Importing or running `cimind` opens zero unsolicited network sockets and requires no cloud credentials. Live sensor buses, local speech/LLM engines, and robot actuators connect through explicit `Protocol` ports and pure `VerifiedEffect` descriptors:
+
+| Path | Responsibility |
+| :--- | :--- |
+| [`src/cimind/domain.py`](src/cimind/domain.py) | Canonical domain enums, `PatientCareProfile`, `VerifiedEffect` value objects, and `GERIATRIC_DRUG_CATALOG` |
+| [`src/cimind/mmu.py`](src/cimind/mmu.py) | 4-zone `EpistemicMemoryMMU`, `HindsightTransportPort`, signed bi-temporal `ClinicalVault`, and SQLite velocity ledger |
+| [`src/cimind/audit.py`](src/cimind/audit.py) | Append-only SQLite `AuditLedger` with `prev_sha256 -> entry_sha256` tamper verification |
+| [`src/cimind/hindsight.py`](src/cimind/hindsight.py) | HTTP/custom-transport client and UTC window verifier for self-hosted [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) |
+| [`src/cimind/reflex.py`](src/cimind/reflex.py) | Pure `< 5 ms` `SafetyReflexEngine` (camera-free fall fusion, `590 nm` pathway, fail-safe geolock, GNSS handover, `HEAR` gate) |
+| [`src/cimind/circadian.py`](src/cimind/circadian.py) | `CIE S 026` melanopic Equivalent Daylight Illuminance (`m-EDI`) solver (`>= 250 m-EDI` daytime, `< 10 m-EDI` evening) |
+| [`src/cimind/geotrigger.py`](src/cimind/geotrigger.py) | WGS-84 Haversine 3-zone LoRaWAN (`ChirpStack` / `WisGate` / `The Things Stack`) geofence engine |
+| [`src/cimind/companion.py`](src/cimind/companion.py) | `CompanionAndConcierge`, `LanguageEnginePort`, `FulfillmentPort`, `Ikigai`/`Cognicise` rituals, and Mode A/B concierge |
+| [`src/cimind/policy.py`](src/cimind/policy.py) | 3-tier deterministic action gate (`Tier 1` autonomous, `Tier 2` velocity-capped, `Tier 3` clinical escalation) |
+| [`src/cimind/sentinel.py`](src/cimind/sentinel.py) | Pure `ClinicalSentinelCron` (`21d` `Median/MAD`, `PV-1..PV-6`, `COAST-6`, `t-HELP`, `Household Care Graph` routing) |
+| [`src/cimind/appliance.py`](src/cimind/appliance.py) | Top-level `CiMindAppliance` coordinator |
+| [`src/cimind/cli.py`](src/cimind/cli.py) | Offline diagnostic CLI (`doctor`, `circadian`, `reflex`, `sentinel`, `concierge`, `geotrigger`) |
+| [`docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md`](docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md) | Private LoRaWAN + `Reachy Mini` perimeter safety reference architecture |
+| [`blueprints/homeassistant/circadian_sundowning_guard.yaml`](blueprints/homeassistant/circadian_sundowning_guard.yaml) | Local Home Assistant circadian lighting & sundowning de-escalation blueprint |
+| [`esphome/cimind_room_presence_node.yaml`](esphome/cimind_room_presence_node.yaml) | Local ESPHome `60 GHz` mmWave + ambient lux room sensor template |
+
+---
+
+## Local Verification
+
+```sh
+uv sync --locked
 uv run ruff check .
 uv run ruff format --check .
-uv run pytest
+uv run --python 3.11 pytest
+uv run --python 3.12 pytest
 uv build
 ```
 
----
-
-## 3. Implementation Status (Shipped Today vs. Planned Roadmap)
-
-`CiMind` `v0.1.0` ships the core pure-Python (`stdlib`) verification kernel, LoRaWAN geotrigger & Reachy Mini orchestration harness, and Home Assistant / ESPHome templates. External MCP transport, medical-record, and commerce dispatchers are planned roadmap modules:
-
-| Component | Status | Path / Scope |
-| :--- | :--- | :--- |
-| **Hash-Chained SQLite Audit Ledger** | **Implemented** | `src/cimind/audit.py` (`AuditLedger`, `AuditEntry`, SHA-256 chain verification) |
-| **3-Tier Deterministic Policy Engine** | **Implemented** | `src/cimind/policy.py` (`ActionTier`, `ActionIntent`, `PolicyConfig`, `evaluate_action_intent`) |
-| **Hindsight Temporal Memory Verifier** | **Implemented** | `src/cimind/hindsight.py` (`HindsightMemoryBank`, `CareEpisodicEvent`, `verify_event_in_window`) |
-| **Circadian Melanopic EDI Calculator** | **Implemented** | `src/cimind/circadian.py` (`compute_melanopic_edi`, `compute_circadian_target`) |
-| **LoRaWAN Geotrigger & Reachy Mini Harness** | **Implemented** | `src/cimind/geotrigger.py`, [`docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md`](docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md) (`RAK4631` / `WisGate` / `ChirpStack` / `TTS` ingestion, 3-zone Haversine hysteresis, `ReachyMiniCue`) |
-| **CLI Diagnostics & Policy Self-Test** | **Implemented** | `src/cimind/cli.py` (`cimind doctor`, `cimind circadian`, `cimind geotrigger`) |
-| **Home Assistant & ESPHome Templates** | **Implemented** | `blueprints/homeassistant/circadian_sundowning_guard.yaml`, `esphome/cimind_room_presence_node.yaml` |
-| **MCP Host Transport Server** | *Planned Roadmap* | Typed MCP tool/resource transport wrapping `AuditLedger` and `evaluate_action_intent` |
-| **Spatial Face/UWB & Local FHIR Vault** | *Planned Roadmap* | On-device face/UWB object localization and SQLCipher `FHIR R4` / `Medikationsplan` store |
-| **Live HA WebSocket Daemon** | *Planned Roadmap* | Bidirectional Home Assistant WebSocket daemon streaming live 60 GHz mmWave and LoRa gateway events |
-| **CalDAV, Commerce & Escalation Dispatch** | *Planned Roadmap* | Policy-sandboxed CalDAV, pharmacy/grocery ordering, and emergency contact dispatchers |
-| **Multi-Device Embodiment Transport** | *Planned Roadmap* | Live gRPC/serial transport adapters for `Pollen Robotics Reachy Mini` (`actlatch`), `BasedHardware Omi`, `Pimoroni Presto`, `M5Stack`, and `biquadctl` room audio |
+Never commit credentials, household transcripts, raw audio/video captures, patient records, or runtime SQLite databases.
 
 ---
 
-## 4. Five-Module Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│              1. AGENT-AGNOSTIC REASONING LAYER (Planned MCP Host)               │
-│  Pluggable Local LLM/VLM Engines (Qwen / Llama / Gemma / Mistral / DeepSeek)    │
-│  Running on Local NPU/GPU (Apple Silicon, Ryzen AI Max+ 395, Hailo-10H, Orin)   │
-└────────────────────────────────────────┬────────────────────────────────────────┘
-                                         │ Typed Tool & Resource Contracts
-┌────────────────────────────────────────▼────────────────────────────────────────┐
-│        2. CIMIND AUDITABLE KERNEL & DETERMINISTIC POLICY GATE (Implemented)     │
-│  • Hash-Chained Append-Only Audit Ledger (SQLite SHA-256 Provenance)            │
-│  • Anti-Hallucination Temporal Fact Verifier (Graph-Evidence Required)          │
-│  • 3-Tier Action Policy Engine (Routine / Capped Commerce / Emergency)          │
-├───────────────────────────┬───────────────────────────┬─────────────────────────┤
-│ 3. UNIFIED MEMORY VAULT   │ 4. AMBIENT HOME & SAFETY  │ 5. ACTION & EMBODIMENT  │
-│ • Hindsight Adapter &     │ • Circadian EDI Math &    │ • Reachy Mini Cue &     │
-│   Window Gate (Shipped)   │   HA/ESPHome Blueprints   │   Geotrigger Harness    │
-│ • Spatial Face/UWB &      │   (Shipped)               │   (Shipped)             │
-│   FHIR R4 Medical Vault   │ • LoRaWAN RAK4631/WisGate │ • Planned Live Hardware │
-│   (Planned Roadmap)       │   3-Zone Geotrigger       │   Drivers (actlatch,    │
-│                           │   Engine (Shipped)        │   Omi, Presto, Audio)   │
-└───────────────────────────┴───────────────────────────┴─────────────────────────┘
-```
-
-### Module 1: `cimind-kernel` (`src/cimind/audit.py`, `src/cimind/policy.py` — Implemented Core; MCP Transport Planned)
-
-- **Untrusted Coprocessor Boundary:** Local language models hold zero authoritative state and cannot trigger external side effects directly. Every proposed `ActionIntent` is evaluated by `evaluate_action_intent(...)` and recorded in `AuditLedger`.
-- **Tamper-Evident Auditability:** Each SQLite row commits `SHA-256` over `(seq, timestamp_utc, prev_sha256, actor_id, action_type, evidence_ids, policy_rule_id, payload, result_status)`. Any single-byte mutation breaks `verify_chain()`.
-
-### Module 2: `cimind-memory` (`src/cimind/hindsight.py` — Implemented Hindsight Verifier; Spatial & FHIR Vaults Planned)
-
-- **Episodic Spatio-Temporal Memory Bank (`HindsightMemoryBank`):** Integrates with a self-hosted [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) instance (`http://127.0.0.1:8888` default) to retain and recall structured `CareEpisodicEvent` tuples `(actor_id, action_type, object_name, room, timestamp_utc, confidence, sensor_provenance)`.
-- **Anti-Hallucination Temporal Window Gate (`verify_event_in_window`):** Standard vector retrieval conflates recurring daily events (*"Did I take my morning blood-pressure pill today or yesterday?"*). `verify_event_in_window(...)` enforces explicit UTC window bounds and confidence thresholds (`>= 0.90`) before confirming an episode occurred.
-- **Planned Roadmap Extensions:** On-device face/UWB spatial item localization and an encrypted local `FHIR R4` / `Bundeseinheitlicher Medikationsplan` SQLCipher store.
-
-### Module 3: `cimind-home` (`src/cimind/circadian.py`, `src/cimind/geotrigger.py`, `blueprints/`, `esphome/` — Implemented)
-
-- **Circadian Melanopic Lighting (`compute_melanopic_edi` & `compute_circadian_target`):** Targets high melanopic EDI (`>= 250 lx`, `5500K`) in the morning (`07:00-12:00`), gradual warm-amber transitions (`2700K -> 2200K`) in the late afternoon to mitigate *sundowning* confusion, and `18%` (`2000K`) floor-path lighting during nocturnal bed exits.
-- **LoRaWAN / Sub-GHz Wandering Geofence (`src/cimind/geotrigger.py`):** Ingests `ChirpStack v4`, `The Things Stack v3`, `RAKwireless WisGateOS 2`, and `wadamesh` JSON uplinks from `RAKwireless WisBlock RAK4631` (`nRF52840 + SX1262 + RAK12500 GNSS + RAK1904 ACC`) wearable nodes. Enforces HDOP multipath filtering (`max_hdop = 3.5`), 3 concentric zones (`HOME_SAFE <= 35 m`, `PERIMETER_BUFFER 35..90 m`, `WANDERING_BREACH > 90 m`), inward hysteresis (`5 m`), 2-packet breach debounce, and stationary buffer dwell timeouts (`300 s`). See [`docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md`](docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md) for the complete specification.
-- **Zero-Camera Room Presence & Safety Templates:** Ships a Home Assistant automation blueprint (`blueprints/homeassistant/circadian_sundowning_guard.yaml`) and an ESPHome node configuration (`esphome/cimind_room_presence_node.yaml`) built around Home Assistant 60 GHz mmWave presence/fall sensors, PIR wake triggers, and environmental sensors without bedroom or bathroom cameras.
-
-### Module 4: `cimind-act` (`src/cimind/policy.py` — Policy Rules Implemented; External Dispatchers Planned)
-
-| Tier | Scope of Actions | Policy Gate & Safeguards (`evaluate_action_intent`) |
-| :--- | :--- | :--- |
-| **Tier 1: Routine & Comfort** | Orientation Q&A, calendar reminders, circadian lighting, perimeter buffer check-in (`ReachyMiniCue`), familiar music. | Autonomous execution; logged to `audit_ledger` (`RULE_TIER1_ROUTINE_AUTONOMOUS`). |
-| **Tier 2: Book, Buy & Order** | Recurring care supplies, pharmacy refills, appointment/transport booking. | Merchant allowlist (`RULE_TIER2_MERCHANT_ALLOWLIST`), hard per-transaction cap (`<= 75 EUR`), and caregiver co-sign above `35 EUR`. |
-| **Tier 3: Clinical & Emergency** | Physician drift digest; fall, stove hazard, or LoRaWAN geofence-breach / SOS escalation. | Requires verified sensor or graph evidence IDs (`RULE_TIER3_EVIDENCE_REQUIRED` -> `RULE_TIER3_DETERMINISTIC_ESCALATION`) before multi-channel escalation. |
-
-### Module 5: `cimind-embodiment` (`ReachyMiniCue` Orchestration Implemented; Hardware Drivers Planned)
-
-- Deterministic physical orientation cues (`ReachyMiniCue` in `src/cimind/geotrigger.py`) synthesize head yaw/pitch orientation, antenna gestures (`calm_breathing`, `attentive_ear_tilt`, `urgent_beacon_pulse`), bilingual German/English reassurance prompts, and circadian entrance lighting targets for **`Pollen Robotics Reachy Mini`** (`actlatch`), coordinated with wearable audio/vision nodes (`BasedHardware Omi`), high-contrast orientation displays (`Pimoroni Presto`, `M5Stack`), and multi-room local DSP audio (`biquadctl`).
-
----
-
-## 5. License & Legal
+## License & Legal
 
 Licensed under the [Apache License 2.0](LICENSE).
-Independent, non-commercial open-source research software not affiliated with any referenced third-party hardware manufacturer; not a certified medical device under Regulation (EU) 2017/745 (see [`LEGAL.md`](LEGAL.md) and [`SECURITY.md`](SECURITY.md) for statutory interoperability, regulatory compliance, and AS IS warranty disclaimers).
+Independent, non-commercial open-source research software maintained by **TinkeringDao Labs** (`hello@tinkeringdao.dev`); not affiliated with any referenced third-party hardware manufacturer and not a certified medical device under Regulation (EU) 2017/745 or 21 CFR Part 820 (see [`LEGAL.md`](LEGAL.md), [`SECURITY.md`](SECURITY.md), and [`CONTRIBUTING.md`](CONTRIBUTING.md)).
