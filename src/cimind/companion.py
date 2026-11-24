@@ -6,7 +6,6 @@ import json
 import re
 from collections import deque
 from dataclasses import dataclass, replace
-from datetime import timedelta
 from typing import Literal, Protocol
 
 from cimind.domain import (
@@ -21,7 +20,6 @@ from cimind.domain import (
     TherapeuticMode,
     VerifiedEffect,
 )
-from cimind.hindsight import _parse_iso_utc
 from cimind.mmu import CommerceSpendRecord, EpistemicContextBundle, EpistemicMemoryMMU
 from cimind.policy import ActionTier
 
@@ -457,6 +455,7 @@ class MockFulfillmentAdapter:
 
 ConciergeState = Literal[
     "BROWSING",
+    "DEFERRED_LUCIDITY_WINDOW",
     "AUTHORING",
     "READY_FOR_FULFILLMENT",
     "AWAITING_COSIGN",
@@ -481,6 +480,7 @@ class ConciergeSession:
     voice_note_id: str | None = None
     voice_note_duration_s: float = 0.0
     receipt: FulfillmentReceipt | None = None
+    deferred_lucidity_window: tuple[int, int] | None = None
 
     @property
     def idempotency_key(self) -> str:
@@ -517,6 +517,7 @@ class ConciergeAction:
         "AUTHOR_MESSAGE",
         "SUBMIT_FOR_FULFILLMENT",
         "COSIGN_APPROVE",
+        "DEFER_TO_LUCIDITY_WINDOW",
     ]
     slot_index: Literal[1, 2, 3] | None = None
     card_id: str | None = None
@@ -526,6 +527,8 @@ class ConciergeAction:
     voice_note_duration_s: float = 0.0
     actor_id: str = ""
     signature_hex: str = ""
+    lucidity_start_hour: int = 9
+    lucidity_end_hour: int = 11
 
 
 @dataclass(frozen=True)
@@ -559,7 +562,6 @@ class CompanionAndConcierge:
         self._policy = velocity_policy or VelocityPolicyConfig()
         self._proactive_ikigai_window: deque[bool] = deque(maxlen=10)
         self._executed_receipts: dict[str, FulfillmentReceipt] = {}
-        self._order_timestamps_utc: list[str] = []
 
     @property
     def rolling_ikigai_ratio(self) -> float:
@@ -802,16 +804,11 @@ class CompanionAndConcierge:
             cards=cards,
         )
 
-    def _orders_7d_count(self, now_utc: str) -> int:
-        now_dt = _parse_iso_utc(now_utc)
-        cut_7d = now_dt - timedelta(days=7)
-        return sum(1 for ts in self._order_timestamps_utc if cut_7d <= _parse_iso_utc(ts) <= now_dt)
-
     def _exceeds_velocity_caps(
         self, amount_eur: float, mmu: EpistemicMemoryMMU, now_utc: str
     ) -> bool:
         spend_24h, spend_7d, orders_24h = mmu.rolling_commerce_velocity(now_utc)
-        orders_7d = self._orders_7d_count(now_utc)
+        orders_7d = mmu.rolling_commerce_orders_7d(now_utc)
         return (
             round(spend_24h + amount_eur, 2) > self._policy.max_spend_24h_eur
             or round(spend_7d + amount_eur, 2) > self._policy.max_spend_7d_eur
@@ -857,7 +854,6 @@ class CompanionAndConcierge:
         )
         receipt = self._fulfillment.execute_order(order, timestamp_utc=now_utc)
         self._executed_receipts[idem_key] = receipt
-        self._order_timestamps_utc.append(now_utc)
         mmu.record_commerce_spend(
             CommerceSpendRecord(
                 timestamp_utc=now_utc,
@@ -946,6 +942,27 @@ class CompanionAndConcierge:
             return ConciergeStepResult(
                 status="DENIED_STAGE_PALLIATIVE",
                 session=replace(session, state="DENIED"),
+            )
+
+        if action.kind == "DEFER_TO_LUCIDITY_WINDOW":
+            window = (action.lucidity_start_hour % 24, action.lucidity_end_hour % 24)
+            deferred_sess = replace(
+                session,
+                state="DEFERRED_LUCIDITY_WINDOW",
+                deferred_lucidity_window=window,
+            )
+            mmu.append_audit(
+                actor_id=session.patient_id,
+                action_type="CONCIERGE_DEFERRED_LUCIDITY_WINDOW",
+                evidence_ids=(session.session_id,),
+                policy_rule_id="RULE_LUCIDITY_WINDOW_REMINDER",
+                payload={"lucidity_window_hours": list(window)},
+                result_status="DEFERRED",
+                timestamp_utc=now_utc,
+            )
+            return ConciergeStepResult(
+                status="DEFERRED_LUCIDITY_WINDOW",
+                session=deferred_sess,
             )
 
         if action.kind == "SELECT_CARD":

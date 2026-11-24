@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Any, Literal
 
 from cimind.circadian import CircadianTarget
 from cimind.policy import ActionTier
+
+
+def parse_iso_utc(timestamp_utc: str) -> datetime:
+    """Parse an ISO-8601 UTC timestamp string (supporting trailing 'Z') into a datetime."""
+    normalized = timestamp_utc.strip().replace("Z", "+00:00")
+    return datetime.fromisoformat(normalized)
 
 
 class GdsStage(IntEnum):
@@ -235,6 +242,39 @@ class ValidatedVitalEpoch:
     respiration_rate_bpm: float
     rmssd_ms: float | None = None
     observability_score: float = 1.0
+
+
+@dataclass(frozen=True)
+class GeriatricDrugSpec:
+    """Canonical Beers/ACB geriatric pharmacovigilance metadata."""
+
+    drug_name: str
+    drug_class: str
+    acb_score: int
+    watch_days: int
+    beers_avoid: bool = False
+    is_d2_antagonist: bool = False
+
+
+GERIATRIC_DRUG_CATALOG: dict[str, GeriatricDrugSpec] = {
+    "donepezil": GeriatricDrugSpec("donepezil", "CHEI", 0, 42),
+    "rivastigmine": GeriatricDrugSpec("rivastigmine", "CHEI", 0, 42),
+    "galantamine": GeriatricDrugSpec("galantamine", "CHEI", 0, 42),
+    "memantine": GeriatricDrugSpec("memantine", "NMDA_ANTAGONIST", 0, 90),
+    "lecanemab": GeriatricDrugSpec("lecanemab", "ANTI_AMYLOID_MAB", 0, 112),
+    "donanemab": GeriatricDrugSpec("donanemab", "ANTI_AMYLOID_MAB", 0, 112),
+    "haloperidol": GeriatricDrugSpec("haloperidol", "ANTIPSYCHOTIC_D2", 1, 28, True, True),
+    "risperidone": GeriatricDrugSpec("risperidone", "ANTIPSYCHOTIC_D2", 1, 28, True, True),
+    "quetiapine": GeriatricDrugSpec("quetiapine", "ANTIPSYCHOTIC_SEDATIVE", 3, 28, True, True),
+    "zolpidem": GeriatricDrugSpec("zolpidem", "Z_DRUG_HYPNOTIC", 0, 14, True),
+    "eszopiclone": GeriatricDrugSpec("eszopiclone", "Z_DRUG_HYPNOTIC", 0, 14, True),
+    "oxybutynin": GeriatricDrugSpec("oxybutynin", "BLADDER_ANTIMUSCARINIC", 3, 28, True),
+    "diphenhydramine": GeriatricDrugSpec("diphenhydramine", "ANTICHOLINERGIC_OTC", 3, 28, True),
+    "amitriptyline": GeriatricDrugSpec("amitriptyline", "TCA_ANTICHOLINERGIC", 3, 56, True),
+    "tamsulosin": GeriatricDrugSpec("tamsulosin", "ALPHA1_BLOCKER", 0, 56),
+    "doxazosin": GeriatricDrugSpec("doxazosin", "ALPHA1_BLOCKER", 0, 56, True),
+    "terazosin": GeriatricDrugSpec("terazosin", "ALPHA1_BLOCKER", 0, 56, True),
+}
 
 
 VerifiedEffect = PathwayAndAmbientEffect | EmbodiedPromptEffect | CareGraphAlertEffect

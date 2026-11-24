@@ -7,13 +7,15 @@ from dataclasses import dataclass, field
 from datetime import date
 from enum import StrEnum
 from statistics import median
-from typing import Any, Literal
+from typing import Literal
 
 from cimind.domain import (
+    GERIATRIC_DRUG_CATALOG,
     CareGraphAlertEffect,
     CareGraphMember,
     CareRole,
     GdsStage,
+    GeriatricDrugSpec,
     PatientCareProfile,
 )
 from cimind.policy import ActionTier
@@ -78,38 +80,6 @@ class CoastAssessment:
     human_social_episodes_7d: int = 0
     pillar_deficits: dict[CoastPillar, float] = field(default_factory=dict)
     scheduled_activities: tuple[ScheduledDeficitActivity, ...] = ()
-
-
-@dataclass(frozen=True)
-class GeriatricDrugSpec:
-    """Offline AGS Beers 2023 & Anticholinergic Cognitive Burden (ACB) reference entry."""
-
-    drug_name: str
-    drug_class: str
-    acb_score: int
-    watch_days: int
-    beers_avoid: bool = False
-    is_d2_antagonist: bool = False
-
-
-GERIATRIC_DRUG_CATALOG: dict[str, GeriatricDrugSpec] = {
-    "donepezil": GeriatricDrugSpec("donepezil", "CHEI", 0, 42),
-    "rivastigmine": GeriatricDrugSpec("rivastigmine", "CHEI", 0, 42),
-    "galantamine": GeriatricDrugSpec("galantamine", "CHEI", 0, 42),
-    "memantine": GeriatricDrugSpec("memantine", "NMDA_ANTAGONIST", 0, 90),
-    "lecanemab": GeriatricDrugSpec("lecanemab", "ANTI_AMYLOID_MAB", 0, 112),
-    "donanemab": GeriatricDrugSpec("donanemab", "ANTI_AMYLOID_MAB", 0, 112),
-    "risperidone": GeriatricDrugSpec("risperidone", "ANTIPSYCHOTIC_D2", 1, 28, True, True),
-    "quetiapine": GeriatricDrugSpec("quetiapine", "ANTIPSYCHOTIC_SEDATIVE", 3, 28, True, True),
-    "zolpidem": GeriatricDrugSpec("zolpidem", "Z_DRUG_HYPNOTIC", 0, 14, True),
-    "eszopiclone": GeriatricDrugSpec("eszopiclone", "Z_DRUG_HYPNOTIC", 0, 14, True),
-    "oxybutynin": GeriatricDrugSpec("oxybutynin", "BLADDER_ANTIMUSCARINIC", 3, 28, True),
-    "diphenhydramine": GeriatricDrugSpec("diphenhydramine", "ANTICHOLINERGIC_OTC", 3, 28, True),
-    "amitriptyline": GeriatricDrugSpec("amitriptyline", "TCA_ANTICHOLINERGIC", 3, 56, True),
-    "tamsulosin": GeriatricDrugSpec("tamsulosin", "ALPHA1_BLOCKER", 0, 56),
-    "doxazosin": GeriatricDrugSpec("doxazosin", "ALPHA1_BLOCKER", 0, 56, True),
-    "terazosin": GeriatricDrugSpec("terazosin", "ALPHA1_BLOCKER", 0, 56, True),
-}
 
 
 MedicationEventType = Literal[
@@ -325,6 +295,7 @@ class SentinelCronState:
     routine_digests_sent_today: int = 0
     consecutive_healthy_noop_runs: int = 0
     base_wakeup_seconds: int = BASE_WAKEUP_SECONDS
+    last_digest_day_iso: str = ""
 
 
 @dataclass(frozen=True)
@@ -1450,11 +1421,18 @@ class ClinicalSentinelCron:
 
         human_isolation_drop = len(rollups) >= 5 and coast.human_social_episodes_7d < 2
 
-        all_candidate_codes = [a.alert_code for a in (*emergency_alerts, *routine_candidates)]
-        remaining_budget = max(0, ROUTINE_DIGEST_DAILY_CAP - cron_state.routine_digests_sent_today)
+        sent_today = (
+            0
+            if (
+                cron_state.last_digest_day_iso and cron_state.last_digest_day_iso != current.day_iso
+            )
+            else cron_state.routine_digests_sent_today
+        )
+        remaining_budget = max(0, ROUTINE_DIGEST_DAILY_CAP - sent_today)
         if len(routine_candidates) > remaining_budget:
             suppressed.append("ROUTINE_DIGEST_CAP_REACHED")
         approved_routine = routine_candidates[:remaining_budget]
+        all_candidate_codes = [a.alert_code for a in (*emergency_alerts, *approved_routine)]
 
         all_alerts = (*emergency_alerts, *approved_routine)
         packets = _dispatch_care_graph_packets(
@@ -1491,10 +1469,10 @@ class ClinicalSentinelCron:
             next_wakeup = cron_state.base_wakeup_seconds
 
         next_state = SentinelCronState(
-            routine_digests_sent_today=cron_state.routine_digests_sent_today
-            + len(approved_routine),
+            routine_digests_sent_today=sent_today + len(approved_routine),
             consecutive_healthy_noop_runs=next_noop,
             base_wakeup_seconds=cron_state.base_wakeup_seconds,
+            last_digest_day_iso=current.day_iso,
         )
         return SentinelReport(
             evaluated_day_iso=current.day_iso,
@@ -1517,9 +1495,28 @@ class ClinicalSentinelCron:
         )
 
 
-def evaluate_window(**kwargs: Any) -> SentinelReport:
-    """Convenience functional entry point delegating to ClinicalSentinelCron.evaluate_window."""
-    return ClinicalSentinelCron().evaluate_window(**kwargs)
+def evaluate_window(
+    *,
+    profile: PatientCareProfile,
+    rollups: Sequence[DailyRollup],
+    medications: Sequence[MedicationWatchSpec] = (),
+    care_graph: Sequence[CareGraphMember] = (),
+    vulnerability_flags: frozenset[VulnerabilityFlag] = frozenset(),
+    informant_rating: InformantRating | None = None,
+    evaluation_hour_local: int = 8,
+    state: SentinelCronState | None = None,
+) -> SentinelReport:
+    """Explicitly typed functional entry point delegating to ClinicalSentinelCron."""
+    return ClinicalSentinelCron().evaluate_window(
+        profile=profile,
+        rollups=rollups,
+        medications=medications,
+        care_graph=care_graph,
+        vulnerability_flags=vulnerability_flags,
+        informant_rating=informant_rating,
+        evaluation_hour_local=evaluation_hour_local,
+        state=state,
+    )
 
 
 __all__ = [

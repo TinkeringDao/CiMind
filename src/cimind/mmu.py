@@ -14,14 +14,16 @@ from typing import Any, Literal, Protocol
 
 from cimind.audit import AuditEntry, AuditLedger, AuditVerificationReport
 from cimind.domain import (
+    GERIATRIC_DRUG_CATALOG,
     EpistemicViolationError,
     EpistemicZone,
     PathologyFlag,
     PatientCareProfile,
     StorageIntegrityError,
     UnobservedModalitiesHeader,
+    parse_iso_utc,
 )
-from cimind.hindsight import CareEpisodicEvent, TemporalVerificationResult, _parse_iso_utc
+from cimind.hindsight import CareEpisodicEvent, TemporalVerificationResult
 
 
 class HindsightTransportPort(Protocol):
@@ -93,6 +95,33 @@ class SignedMutation:
     signature_hex: str
     supersedes_record_id: str | None = None
 
+    @staticmethod
+    def build_canonical_bytes(
+        *,
+        zone: EpistemicZone,
+        category: str,
+        payload: dict[str, Any],
+        valid_from_utc: str,
+    ) -> bytes:
+        return json.dumps(
+            {
+                "category": category,
+                "payload": payload,
+                "valid_from_utc": valid_from_utc,
+                "zone": zone.value,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    def canonical_bytes(self) -> bytes:
+        return self.build_canonical_bytes(
+            zone=self.zone,
+            category=self.category,
+            payload=self.payload,
+            valid_from_utc=self.valid_from_utc,
+        )
+
 
 @dataclass(frozen=True)
 class MutationReceipt:
@@ -115,6 +144,7 @@ class DiarizedSpeechObservation:
     detected_language: str
     pause_to_speech_ratio: float = 0.0
     word_finding_pause_ms: int = 0
+    voice_activity_detected: bool = True
     sensor_id: str = "omi-pendant-01"
 
 
@@ -143,6 +173,7 @@ class EpistemicContextBundle:
     spend_7d_eur: float
     orders_24h_count: int
     unobserved_modalities: UnobservedModalitiesHeader
+    orders_7d_count: int = 0
 
 
 class EpistemicMemoryMMU:
@@ -160,6 +191,7 @@ class EpistemicMemoryMMU:
         hindsight_port: HindsightTransportPort | None = None,
         signature_verifier: SignatureVerifier | None = None,
         require_nvme_storage: bool = False,
+        sqlcipher_key_hex: str | None = None,
     ) -> None:
         self._db_path = str(db_path)
         if require_nvme_storage and "mmcblk" in self._db_path.lower():
@@ -170,6 +202,12 @@ class EpistemicMemoryMMU:
         self._hindsight = hindsight_port or InMemoryHindsightAdapter()
         self._verifier = signature_verifier
         self._conn = sqlite3.connect(self._db_path)
+        if sqlcipher_key_hex is not None:
+            key_clean = sqlcipher_key_hex.strip().lower()
+            if not key_clean or any(ch not in "0123456789abcdef" for ch in key_clean):
+                self._conn.close()
+                raise ValueError("sqlcipher_key_hex must be non-empty hexadecimal.")
+            self._conn.execute(f"PRAGMA key = \"x'{key_clean}'\"")
         self._conn.row_factory = sqlite3.Row
         self._ledger = AuditLedger(":memory:" if self._db_path == ":memory:" else self._db_path)
         self._record_counter = 0
@@ -252,25 +290,37 @@ class EpistemicMemoryMMU:
             result.append(item)
         return tuple(result)
 
+    @staticmethod
+    def _resolve_med_metadata(med_payload: dict[str, Any]) -> tuple[str, int, bool]:
+        drug_key = str(med_payload.get("drug_name", "")).strip().lower()
+        cat = GERIATRIC_DRUG_CATALOG.get(drug_key)
+        drug_class = str(
+            med_payload.get("drug_class") or (cat.drug_class if cat is not None else "")
+        ).upper()
+        acb_raw = med_payload.get("acb_score")
+        acb_score = int(acb_raw) if acb_raw is not None else (cat.acb_score if cat else 0)
+        d2_raw = med_payload.get("is_d2_antagonist")
+        is_d2 = bool(d2_raw) if d2_raw is not None else (cat.is_d2_antagonist if cat else False)
+        return drug_class, acb_score, is_d2
+
     def _screen_medication_intake(self, med_payload: dict[str, Any]) -> tuple[str, ...]:
         warnings: list[str] = []
         profile = self._active_profile_or_none()
-        is_d2 = bool(med_payload.get("is_d2_antagonist", False))
-        acb_new = int(med_payload.get("acb_score", 0))
-        drug_class = str(med_payload.get("drug_class", "")).upper()
+        drug_class, acb_new, is_d2 = self._resolve_med_metadata(med_payload)
 
         if profile is not None and PathologyFlag.LEWY_BODY in profile.pathologies and is_d2:
             warnings.append("DLB_D2_ANTAGONIST_CONTRAINDICATED")
 
         existing_meds = self.active_medications()
-        total_acb = acb_new + sum(int(m.get("acb_score", 0)) for m in existing_meds)
+        existing_meta = [self._resolve_med_metadata(m) for m in existing_meds]
+        total_acb = acb_new + sum(meta[1] for meta in existing_meta)
         if acb_new >= 3 or total_acb >= 3:
             warnings.append("HIGH_ANTICHOLINERGIC_BURDEN_ACB_GE_3")
 
-        has_chei = any(str(m.get("drug_class", "")).upper() == "CHEI" for m in existing_meds)
+        has_chei = any(meta[0] == "CHEI" for meta in existing_meta)
         if (
             has_chei
-            and drug_class in {"BLADDER_ANTIMUSCARINIC", "ANTICHOLINERGIC"}
+            and drug_class in {"BLADDER_ANTIMUSCARINIC", "ANTICHOLINERGIC", "ANTICHOLINERGIC_OTC"}
             and acb_new >= 2
         ):
             warnings.append("CHEI_TO_ANTIMUSCARINIC_PRESCRIBING_CASCADE")
@@ -284,16 +334,7 @@ class EpistemicMemoryMMU:
                 f"commit_signed supports only Zone 1/2, got {mutation.zone}"
             )
 
-        canonical_bytes = json.dumps(
-            {
-                "category": mutation.category,
-                "payload": mutation.payload,
-                "valid_from_utc": mutation.valid_from_utc,
-                "zone": mutation.zone.value,
-            },
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
+        canonical_bytes = mutation.canonical_bytes()
 
         if not self.verify_signature(mutation.actor_id, canonical_bytes, mutation.signature_hex):
             self._ledger.append(
@@ -428,9 +469,13 @@ class EpistemicMemoryMMU:
             )
             return "RETAINED_SENSOR_EPISODE"
 
-        # 4-Gate Broadcast & Noise Quarantine for DiarizedSpeechObservation
+        # 4-Gate Broadcast & Noise Quarantine for DiarizedSpeechObservation:
+        # Gate 1: VAD speech presence; Gate 2: SNR >= 3 dB;
+        # Gate 3: non-broadcast speaker role; Gate 4: near-to-far >= 12 dB when TV/radio active.
         if (
-            observation.snr_db < 3.0
+            not observation.voice_activity_detected
+            or not observation.transcript.strip()
+            or observation.snr_db < 3.0
             or observation.speaker_role == "BROADCAST_MEDIA"
             or (observation.tv_or_radio_active and observation.near_to_far_field_db < 12.0)
         ):
@@ -514,9 +559,8 @@ class EpistemicMemoryMMU:
             timestamp_utc=spend.timestamp_utc,
         )
 
-    def rolling_commerce_velocity(self, now_utc: str) -> tuple[float, float, int]:
-        """Return (spend_24h_eur, spend_7d_eur, orders_24h_count) relative to now_utc."""
-        now_dt = _parse_iso_utc(now_utc)
+    def _commerce_velocity_window(self, now_utc: str) -> tuple[float, float, int, int]:
+        now_dt = parse_iso_utc(now_utc)
         cut_24h = now_dt - timedelta(hours=24)
         cut_7d = now_dt - timedelta(days=7)
         rows = self._conn.execute(
@@ -525,15 +569,26 @@ class EpistemicMemoryMMU:
         spend_24h = 0.0
         spend_7d = 0.0
         count_24h = 0
+        count_7d = 0
         for r in rows:
-            ts = _parse_iso_utc(str(r["timestamp_utc"]))
+            ts = parse_iso_utc(str(r["timestamp_utc"]))
             amt = float(r["amount_eur"])
             if cut_7d <= ts <= now_dt:
                 spend_7d += amt
+                count_7d += 1
             if cut_24h <= ts <= now_dt:
                 spend_24h += amt
                 count_24h += 1
-        return round(spend_24h, 2), round(spend_7d, 2), count_24h
+        return round(spend_24h, 2), round(spend_7d, 2), count_24h, count_7d
+
+    def rolling_commerce_velocity(self, now_utc: str) -> tuple[float, float, int]:
+        """Return (spend_24h_eur, spend_7d_eur, orders_24h_count) relative to now_utc."""
+        spend_24h, spend_7d, count_24h, _ = self._commerce_velocity_window(now_utc)
+        return spend_24h, spend_7d, count_24h
+
+    def rolling_commerce_orders_7d(self, now_utc: str) -> int:
+        """Return durable 7-day order count from SQLite commerce_velocity_ledger."""
+        return self._commerce_velocity_window(now_utc)[3]
 
     def verify_episode_in_window(
         self,
@@ -546,8 +601,8 @@ class EpistemicMemoryMMU:
         min_confidence: float = 0.90,
     ) -> TemporalVerificationResult:
         """Deterministically verify Zone 3 hardware episodes inside [start, end]."""
-        start_dt = _parse_iso_utc(window_start_utc)
-        end_dt = _parse_iso_utc(window_end_utc)
+        start_dt = parse_iso_utc(window_start_utc)
+        end_dt = parse_iso_utc(window_end_utc)
         if end_dt < start_dt:
             raise ValueError("window_end_utc must be >= window_start_utc")
 
@@ -562,7 +617,7 @@ class EpistemicMemoryMMU:
                 or parsed.object_name.lower() != object_name.lower()
             ):
                 continue
-            ev_dt = _parse_iso_utc(parsed.timestamp_utc)
+            ev_dt = parse_iso_utc(parsed.timestamp_utc)
             if not (start_dt <= ev_dt <= end_dt):
                 continue
             if parsed.confidence < min_confidence:
@@ -597,7 +652,7 @@ class EpistemicMemoryMMU:
             raise LookupError("PatientCareProfile must be committed to ClinicalVault first.")
 
         meds = self.active_medications()
-        total_acb = sum(int(m.get("acb_score", 0)) for m in meds)
+        total_acb = sum(self._resolve_med_metadata(m)[1] for m in meds)
 
         bio_rows = self._conn.execute(
             """
@@ -624,8 +679,13 @@ class EpistemicMemoryMMU:
             self.BANK_PATIENT_QUARANTINE, topic_query, budget="mid", max_tokens=1024
         )
         snippets: list[str] = []
-        for q in quarantined_raw[-5:]:
-            snippets.append(str(q.get("text") or q.get("content") or ""))
+        for q in quarantined_raw:
+            raw_txt = str(q.get("text") or q.get("content") or "")
+            ctx_val = str(q.get("context") or "")
+            if ctx_val and ":PATIENT:" not in ctx_val:
+                continue
+            snippets.append(raw_txt)
+        snippets = snippets[-5:]
         fenced_xml = (
             '<unverified_patient_expressions epistemic_truth="false">\n'
             + "\n".join(snippets)
@@ -643,7 +703,7 @@ class EpistemicMemoryMMU:
             + (",".join(offline) if offline else "NONE")
             + " | Assign zero evidentiary weight to unobserved planes."
         )
-        spend_24h, spend_7d, orders_24h = self.rolling_commerce_velocity(now_utc)
+        spend_24h, spend_7d, orders_24h, orders_7d = self._commerce_velocity_window(now_utc)
 
         return EpistemicContextBundle(
             profile=profile,
@@ -656,6 +716,7 @@ class EpistemicMemoryMMU:
             spend_24h_eur=spend_24h,
             spend_7d_eur=spend_7d,
             orders_24h_count=orders_24h,
+            orders_7d_count=orders_7d,
             unobserved_modalities=UnobservedModalitiesHeader(
                 offline_planes=offline,
                 prompt_directive=directive,

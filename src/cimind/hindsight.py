@@ -13,10 +13,10 @@ import os
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from cimind.audit import AuditLedger
+from cimind.domain import parse_iso_utc
 
 DEFAULT_HINDSIGHT_BASE_URL = "http://127.0.0.1:8888/v1/default"
 HindsightTransport = Callable[[str, dict[str, Any]], dict[str, Any]]
@@ -93,9 +93,7 @@ def _default_http_transport(url: str, payload: dict[str, Any]) -> dict[str, Any]
         return json.loads(body) if body else {}
 
 
-def _parse_iso_utc(ts: str) -> datetime:
-    normalized = ts.replace("Z", "+00:00")
-    return datetime.fromisoformat(normalized)
+_parse_iso_utc = parse_iso_utc
 
 
 class HindsightMemoryBank:

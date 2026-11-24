@@ -98,7 +98,7 @@ class CiMindAppliance:
                     ambient_lux=frame.measured_photopic_lux,
                     room=frame.room,
                     ritual_trigger="VESTIBULE_REDIRECT",
-                    is_proactive=True,
+                    is_proactive=False,
                 ),
                 refreshed_ctx,
             )
@@ -164,10 +164,29 @@ class CiMindAppliance:
             now_utc=now_utc,
             active_modalities=self._last_active_modalities,
         )
+        effective_meds: Sequence[MedicationWatchSpec] = medications
+        if not effective_meds and ctx.active_medications:
+            hydrated: list[MedicationWatchSpec] = []
+            for m in ctx.active_medications:
+                drug_name = str(m.get("drug_name", "")).strip()
+                t0_iso = str(m.get("valid_from_utc", ""))[:10]
+                if drug_name and len(t0_iso) == 10:
+                    acb_val = m.get("acb_score")
+                    cls_val = m.get("drug_class")
+                    hydrated.append(
+                        MedicationWatchSpec(
+                            drug_name=drug_name,
+                            t0_day_iso=t0_iso,
+                            acb_score=int(acb_val) if acb_val is not None else None,
+                            drug_class=str(cls_val) if cls_val is not None else None,
+                        )
+                    )
+            effective_meds = tuple(hydrated)
+
         report = self.sentinel.evaluate_window(
             profile=ctx.profile,
             rollups=rollups,
-            medications=medications,
+            medications=effective_meds,
             care_graph=self._care_graph,
             vulnerability_flags=vulnerability_flags,
             informant_rating=informant_rating,

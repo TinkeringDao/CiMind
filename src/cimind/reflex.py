@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, replace
-from datetime import datetime
 from enum import StrEnum
 
 from cimind.circadian import CircadianTarget, compute_circadian_target, compute_melanopic_edi
@@ -12,11 +11,13 @@ from cimind.domain import (
     CareGraphAlertEffect,
     CareRole,
     EmbodiedPromptEffect,
+    GdsStage,
     PathologyFlag,
     PathwayAndAmbientEffect,
     PatientCareProfile,
     ValidatedVitalEpoch,
     VerifiedEffect,
+    parse_iso_utc,
 )
 from cimind.geotrigger import GeofencePolicy, GeofenceZone, haversine_meters
 from cimind.policy import ActionTier
@@ -94,6 +95,7 @@ class ReflexFrame:
     sensor_age_ms: float = 0.0
     patient_vestibule_distance_m: float | None = None
     caregiver_uwb_distance_m: float | None = None
+    caregiver_uwb_age_ms: float = 0.0
     door_lever_vibration: bool = False
     indoor_ble_uwb_locked: bool = True
     indoor_ble_rssi_dbm: int | None = None
@@ -133,8 +135,7 @@ class ReflexTransition:
 
 
 def _parse_epoch_s(timestamp_utc: str) -> float:
-    normalized = timestamp_utc.strip().replace("Z", "+00:00")
-    return datetime.fromisoformat(normalized).timestamp()
+    return parse_iso_utc(timestamp_utc).timestamp()
 
 
 def _clamp_unit(value: float) -> float:
@@ -158,7 +159,7 @@ def _build_embodied_prompt(
         speech_rate_wpm=115 if has_dsl else 125,
         consonant_shelf_db=5.0 if has_dsl else 3.0,
         vad_patience_ms=3500 if has_dsl else 2500,
-        pre_speech_gaze_lead_ms=300,
+        pre_speech_gaze_lead_ms=0 if motor_frozen else 300,
         motor_frozen=motor_frozen,
     )
 
@@ -341,12 +342,14 @@ def step_reflex(
         bed_exit_motion=amber_strip_on,
     )
 
-    # 3. Fail-Safe Active Geolock (0V on smoke/CO open loop, stale sensor, or <=2.5m UWB bypass)
+    # 3. Fail-Safe Active Geolock (0V on smoke/CO open loop, stale sensor, or <=2.5m <250ms UWB)
     sensor_fresh = frame.sensor_health_ok and (
         0.0 <= frame.sensor_age_ms <= max_sensor_staleness_ms
     )
     caregiver_copresent = (
-        frame.caregiver_uwb_distance_m is not None and frame.caregiver_uwb_distance_m <= 2.5
+        frame.caregiver_uwb_distance_m is not None
+        and frame.caregiver_uwb_distance_m <= 2.5
+        and 0.0 <= frame.caregiver_uwb_age_ms <= 250.0
     )
     unescorted_vestibule = (
         frame.patient_vestibule_distance_m is not None
@@ -418,14 +421,25 @@ def step_reflex(
             ),
             boost_required=False,
         )
+        vestibule_text = (
+            "You are safe and comfortable right here; come rest in the warm living room "
+            "with gentle calming music."
+            if profile.gds_stage == GdsStage.GDS_7
+            else (
+                "It is quiet and chilly outside right now. "
+                "Come sit with me in the warm living room; fresh tea is ready for us."
+            )
+        )
+        vestibule_ritual = (
+            "sensory_palliative_vestibule_comfort"
+            if profile.gds_stage == GdsStage.GDS_7
+            else "vestibule_warm_tea_redirect"
+        )
         effects.append(
             _build_embodied_prompt(
                 profile,
-                spoken_text=(
-                    "It is quiet and chilly outside right now. "
-                    "Come sit with me in the warm living room; fresh tea is ready for us."
-                ),
-                ritual_kind="vestibule_warm_tea_redirect",
+                spoken_text=vestibule_text,
+                ritual_kind=vestibule_ritual,
                 language_bcp47=profile.mother_tongue_l1,
                 motor_frozen=dlb_motor_frozen,
             )
@@ -464,7 +478,6 @@ def step_reflex(
     )
     untracked_egress = (
         (frame.front_door_opened or frame.hallway_egress_detected)
-        and frame.hallway_egress_detected
         and wearable_left_behind
         and not caregiver_copresent
         and not frame.bed_occupied
@@ -492,14 +505,25 @@ def step_reflex(
         gnss_state = GnssHandoverState.UNTRACKED_ELOPEMENT
         vestibule_warm_redirect = True
         if not unescorted_vestibule and frame.smoke_co_nc_loop_closed:
+            elop_text = (
+                "You are safe right here; step back into the warm living room "
+                "with gentle calming music."
+                if profile.gds_stage == GdsStage.GDS_7
+                else (
+                    "It is chilly outside right now. Step back into the warm "
+                    "living room with me for a cup of tea."
+                )
+            )
+            elop_ritual = (
+                "sensory_palliative_vestibule_comfort"
+                if profile.gds_stage == GdsStage.GDS_7
+                else "vestibule_warm_tea_redirect"
+            )
             effects.append(
                 _build_embodied_prompt(
                     profile,
-                    spoken_text=(
-                        "It is chilly outside right now. Step back into the warm "
-                        "living room with me for a cup of tea."
-                    ),
-                    ritual_kind="vestibule_warm_tea_redirect",
+                    spoken_text=elop_text,
+                    ritual_kind=elop_ritual,
                     language_bcp47=profile.mother_tongue_l1,
                     motor_frozen=dlb_motor_frozen,
                 )

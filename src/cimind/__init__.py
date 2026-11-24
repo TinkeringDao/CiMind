@@ -38,6 +38,7 @@ from cimind.domain import (
     UnobservedModalitiesHeader,
     ValidatedVitalEpoch,
     VerifiedEffect,
+    parse_iso_utc,
 )
 from cimind.geotrigger import (
     GeofenceEvaluation,
@@ -184,6 +185,7 @@ __all__ = [
     "evaluate_geofence_telemetry",
     "evaluate_window",
     "haversine_meters",
+    "parse_iso_utc",
     "parse_lorawan_uplink",
     "process_lorawan_geotrigger",
     "step_reflex",

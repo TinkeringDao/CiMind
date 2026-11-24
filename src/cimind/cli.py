@@ -38,16 +38,12 @@ def _sign_local(
     payload: dict[str, object],
     valid_from_utc: str,
 ) -> str:
-    canonical = json.dumps(
-        {
-            "category": category,
-            "payload": payload,
-            "valid_from_utc": valid_from_utc,
-            "zone": zone.value,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    canonical = SignedMutation.build_canonical_bytes(
+        zone=zone,
+        category=category,
+        payload=dict(payload),
+        valid_from_utc=valid_from_utc,
+    )
     return hmac.new(secret, canonical, hashlib.sha256).hexdigest()
 
 
