@@ -1,0 +1,113 @@
+# Clinical & Systems Evidence Rationale (`TinkeringDao/CiMind`)
+
+**Package Version:** `0.2.0` (`Python >= 3.11`, zero third-party runtime dependencies)  
+**Archival Whitepaper DOI:** [`10.5281/zenodo.24504102`](https://doi.org/10.5281/zenodo.24504102) · **Software Release DOI:** [`10.5281/zenodo.24504136`](https://doi.org/10.5281/zenodo.24504136)  
+**Repository:** `https://github.com/TinkeringDao/CiMind`  
+**Organization:** `TinkeringDao Labs` (`https://tinkeringdao.dev` · Bavaria, Germany)  
+**Code License:** `Apache-2.0` · **Documentation License:** `CC-BY-4.0`
+
+---
+
+## 1. Purpose & Non-MDR Research Boundary (`Regulation (EU) 2017/745` & `MDCG 2019-11 Rev. 1`)
+
+`CiMind` is an open-source, local-first ambient smart-home, episodic-context, and caregiver-coordination research kernel designed to study deterministic safety envelopes around untrusted local language models in aging-in-place households across Reisberg functional stages (`GDS 1–7`, `PMID: 7114303`).
+
+| Governance & Regulatory Plane | Enforced `CiMind` Scope Boundary | Statutory Reference |
+| :--- | :--- | :--- |
+| **Non-Medical Device Software (`Non-MDSW`)** | `CiMind` does **not** diagnose, treat, cure, alleviate, or clinically predict disease. Longitudinal anomaly flags (`ClinicalSentinelCron`) carry `NON_PRESCRIPTIVE_CLINICIAN_BANNER` as observational routine summaries for human caregiver and physician review—never autonomous clinical decisions. | `Regulation (EU) 2017/745` (`Art. 2(1)`), `MDCG 2019-11 Rev. 1` (Rule 11 exclusion for ambient lifestyle, caregiver workflow, and non-commercial research scaffolds), US `21 U.S.C. § 360j(o)` |
+| **Non-Commercial FOSS Exemption** | Supplied gratuitously outside commercial activity with zero cloud telemetry, zero data monetization, and zero paid SaaS lock-in. | `Regulation (EU) 2024/2847` (`EU CRA` `Art. 2(5)`, Recitals 15 & 18); `Directive (EU) 2024/2853` (`EU PLD` `Art. 2(2)`); [LEGAL.md](../LEGAL.md) |
+| **Perimeter & Door Restraint Law** | Physical magnetic door locking (`EgressMode.ACTIVE_GEOLOCK`) constitutes a deprivation-of-liberty measure in European residential care unless authorized by a guardianship court, and must fail safe (`0 V` release) on smoke/CO/power/stale-sensor faults (`DIN EN 13637`). Unrestrained `OPEN_SOFT_REDIRECT` + sub-GHz LoRaWAN perimeter orientation ([LORAWAN_GEOTRIGGER_ARCHITECTURE.md](LORAWAN_GEOTRIGGER_ARCHITECTURE.md)) is the recommended statutory posture. | German `§ 1831 Abs. 4 BGB` (*Betreuungsgericht* approval), `§ 239 StGB`, `DIN EN 13637` |
+| **Data Minimization & Local Sovereignty** | Zero bedroom/bathroom optical cameras; raw audio, biographical context, and household event graphs remain on local storage behind explicit `Protocol` seams. | `Regulation (EU) 2016/679` (`GDPR` `Art. 5(1)(c)`, `Art. 25`) |
+
+---
+
+## 2. Structural Failure Modes of Existing Assistive & Smart-Home Systems
+
+Commercial elder-tech deployments and generic smart-home LLM assistants split into four disconnected silos, each exhibiting documented residential failure modes:
+
+1. **Unverified RAG Memory Poisoning & Broadcast Bleed:** Generic voice assistants ingest room audio indiscriminately into vector stores. When a person with moderate cognitive impairment confabulates (*"I already took my morning tablets"*) or a television drama plays in the living room, naive Retrieval-Augmented Generation (RAG) stores the utterance as ground truth and repeats it back (`arXiv:2512.12818`; acoustic/background confounding in dementia speech models: `arXiv:2609.21080`).
+2. **Cloud Outage Fragility & Vendor Discontinuation:** Cloud-tethered companions stream intimate household audio off-premise and cease functioning when commercial programs shut down (as seen in discontinued commercial eldercare voice and tabletop companion lines), leaving cognitively vulnerable users without continuity.
+3. **Quiz-Induced Distress, `L2` Attrition & Disembodied Voices:** Standard conversational prompts default to interrogative reality-orientation quizzes (*"Do you remember what day it is?"*) and secondary acquired languages (`L2`). Cochrane meta-analyses and clinical bilingualism cohorts demonstrate that quiz-style reality orientation without emotional validation increases agitation in `GDS 5–6` (`PMID: 22419289`, `PMID: 12917907`, `PMID: 31610547`), while neurodegenerative synaptic attrition strips later-learned `L2` languages years before childhood `L1` (`PMID: 24198291`, `PMID: 32554869`).
+4. **Single-Sensor Alarm Fatigue & Missed Syncopal Slumps:** Wrist impact accelerometers miss slow orthostatic/syncopal slumps lacking `> 3g` impact spikes (`PMID: 23083889`), while single-modality home IoT alerts generate high false-positive rates that cause caregiver burnout (`TIHM` NHS dementia IoT cohort, `PMID: 29708949`, `PMID: 31504609`).
+
+`CiMind` resolves these four failure modes by placing a **pure, zero-I/O, deterministic Python verification kernel** between raw sensor/speech adapters and any downstream actuator or caregiver channel.
+
+---
+
+## 3. Invariant-to-Primary-Evidence Traceability Matrix
+
+Every deterministic rule in `src/cimind/` traces directly to primary clinical trials, consensus guidelines, pharmacovigilance cohorts, or signal-processing literature:
+
+### 3.1 Epistemic Memory Firewall (`src/cimind/mmu.py`, `src/cimind/audit.py`, `src/cimind/hindsight.py`)
+
+| Kernel Invariant | Code Seam | Primary Scientific & Engineering Evidence |
+| :--- | :--- | :--- |
+| **Four-Zone Epistemic Partition (`ClinicalVault`, `VerifiedBiography`, `SensorEpisodeBank`, `PatientUtteranceQuarantine`)** | `EpistemicMemoryMMU.commit_signed()`, `ingest_observation()`, `project_context()` | Separates cryptographically signed caregiver/clinician facts (`Zones 1–2`) and `>= 0.90`-confidence hardware telemetry (`Zone 3`) from patient utterances (`Zone 4`, wrapped inside `<unverified_patient_expressions epistemic_truth="false">`), building on 4-network epistemic memory separation (`vectorize-io/hindsight`, `arXiv:2512.12818`), OS-paged context isolation (`MemGPT`, `arXiv:2310.08560`), temporal knowledge graphs (`Zep`, `arXiv:2501.13956`), and grounded personal memory recall (`REMORA`, `arXiv:2611.28026`). |
+| **4-Gate Broadcast Media & Far-Field Quarantine** | `EpistemicMemoryMMU.ingest_observation()` | Rejects audio frames failing VAD, non-empty transcript, `SNR >= 3.0 dB`, non-broadcast diarization role, or `>= 12.0 dB` near-to-far-field ratio while TV/radio state is active—preventing television dialogue and room-noise artifacts (`arXiv:2609.21080`) from polluting `Zone 4`. |
+| **Explicit `UNOBSERVED_MODALITIES` Header & Edema Ring Guard** | `UnobservedModalitiesHeader.render()`, `EpistemicMemoryMMU.project_context()` | Injects explicit missing-sensor declarations so downstream LLMs do not hallucinate normal vitals under missing modalities (`arXiv:2610.35430`). Automatically marks `smart_ring_ppg` unobserved when `edema_ring_contraindicated=True` to prevent rigid smart-ring digit strangulation/ischemia (`PMID: 36304606`, `PMID: 33240435`). |
+| **Admission-Time Medication Cascade & `DLB` Neuroleptic Screen** | `EpistemicMemoryMMU.commit_signed()`, `GERIATRIC_DRUG_CATALOG` | Screens signed `Zone 1` medication records at write time against `D2`-antagonist antipsychotics in Lewy Body pathology (`DLB` 4th Consensus severe neuroleptic sensitivity, `2–3x` mortality hazard: `PMID: 28592453`; `PMID: 34655485`), cumulative Anticholinergic Cognitive Burden `ACB >= 3` (`PMID: 18477647`, `PMID: 31233095`, `PMID: 25621434`), AGS Beers Criteria (`PMID: 37139824`), and cholinesterase-inhibitor-to-antimuscarinic prescribing cascades (`PMID: 15710796`). |
+
+### 3.2 Sub-5ms Ambient Safety & Circadian Reflexes (`src/cimind/reflex.py`, `src/cimind/circadian.py`, `src/cimind/geotrigger.py`)
+
+| Kernel Invariant | Code Seam | Primary Scientific & Engineering Evidence |
+| :--- | :--- | :--- |
+| **Melanopic Circadian Trajectory (`>= 250 m-EDI` Daytime -> `<= 5 m-EDI` `590 nm` Night)** | `compute_melanopic_edi()`, `compute_circadian_target()`, `SafetyReflexEngine.step()` | Implements daytime circadian anchoring (`5500 K` / `250 m-EDI`), evening sundowning ramp-down (`2700 K` / `40 m-EDI`), and nocturnal `590 nm` amber bed-exit strip (`<= 5 m-EDI`, preserving rod/cone foot-placement contrast without melanopic ipRGC suppression) per the `CIE S 026/E:2018` consensus (`PMID: 35298459`), tailored lighting trials (`PMID: 31135891`), and multi-year cluster RCT evidence (`PMID: 18544726`). |
+| **Post-Rise `180 s` Orthostatic Watch & Camera-Free `2-of-3` Fall Fusion (`slow_slump` + `45 s`/`75 s` Escalation)** | `SafetyReflexEngine.step()` | Tracks the `0–180 s` post-bed/chair-rise cerebral hypoperfusion window (`PMID: 28338809`, `PMID: 30289439`); requires `>= 2`-of-`3` camera-free floor modalities (`60 GHz` mmWave + `32x24` thermal + `15 cm` ToF/piezo; `arXiv:2611.23477`, `arXiv:2603.17069`, `arXiv:2606.11109`, `arXiv:2610.11241`) so low-acceleration syncopal slumps (`< 1.35g`, `PMID: 23083889`) are caught while preventing long-lie mortality (`> 1 h` on floor: `PMID: 8418406`, `PMID: 18977975`). |
+| **`6-Minute` Nocturnal Bathroom Overstay Guard** | `SafetyReflexEngine.step()` | Suppresses false caregiver wake-ups during normal nocturnal toileting (`< 360 s`) and escalates at `>= 360 s` to detect silent bathroom syncope, vasovagal collapse, or fecal-impaction straining without bathroom cameras. |
+| **Fail-Safe `0 V` Egress Interlock, 4-State GNSS Handover, & `35 m / 90 m` LoRaWAN Geofence** | `SafetyReflexEngine.step()`, `evaluate_geofence_telemetry()` | Enforces immediate `0 V` strike release on smoke/CO loop open, stale telemetry (`> 2000 ms`), or UWB caregiver co-presence (`<= 2.5 m`). Couples indoor BLE/UWB gating (GNSS MOSFET off indoors) to `868/915 MHz` LoRaWAN concentric zones (`35 m` inner, `90 m` outer, `5 m` hysteresis, `HDOP <= 3.5`, `2`-packet breach debounce, `300 s` buffer dwell) informed by wandering search-radius epidemiology (`PMID: 21783280`, `PMID: 28248586`). |
+| **`HEAR` Vital Observability Gate & PVDF Bed BCG Fallback** | `SafetyReflexEngine.step()` | Rejects non-contact/wearable HR & respiratory epochs when radar/motion observability `< 0.65` (`HEAR` observability gating, `arXiv:2610.03570`) and falls back automatically to under-mattress PVDF ballistocardiography (`arXiv:2606.07692`, `arXiv:2608.28242`) when ring wear is contraindicated. |
+
+### 3.3 Stage-Adaptive Dialogue & Co-Agency Concierge (`src/cimind/companion.py`, `src/cimind/policy.py`)
+
+| Kernel Invariant | Code Seam | Primary Scientific & Engineering Evidence |
+| :--- | :--- | :--- |
+| **`GDS 1–7` Mode Governance, `GDS 5+` Interrogative/Bereavement Scrub, & 3-Step `IVA`** | `TherapeuticMode.from_gds()`, `CompanionAndConcierge.handle_turn()` | Prohibits open-ended quiz questions (`?`) and bereavement triggers (`died`, `funeral`, deceased relatives' names) in `GDS >= 5`, replacing distressing reality orientation (`PMID: 22419289`) with non-pharmacological validation and Cognitive Stimulation principles (`PMID: 36695604`, `PMID: 12917907`, `PMID: 31610547`, `NICE NG97` `PMID: 30011160` / `NBK513207`, *Lancet* Commission 2024 `PMID: 39096926`). |
+| **Intra-Turn `L2 -> L1` Mother-Tongue Pivot (`> 8,000 ms` Pause) & `GDS <= 4` Code-Switch Exemption** | `CompanionAndConcierge.handle_turn()` | Switches spoken output into childhood `mother_tongue_l1` within the same turn upon `L1` input or word-finding pauses `> 8 s`, while exempting `GDS 1–4` bilingual noun code-switching from pathology drift alarms (`NIMHANS` bilingualism & `L2 -> L1` regression cohorts: `PMID: 24198291`, `PMID: 32554869`, `PMID: 10545388`; cross-linguistic speech markers: `arXiv:2611.17710`, `arXiv:2605.26007`, `arXiv:2607.23977`). |
+| **`LewyBody` Low-Lux (`< 30 lux`) Actuator Freeze & `GDS 7` Dysphagia Oral-Prompt Block** | `CompanionAndConcierge.handle_turn()` | Freezes companion servo motion (`motor_frozen=True`, `pre_speech_gaze_lead_ms=0`) in dim rooms (`< 30 lux`) or nocturnal hours so moving silhouettes cannot trigger `DLB` visual pareidolia (`PMID: 28592453`). Hard-blocks all autonomous food/drink/pill prompts in `GDS 7` or `dysphagia_flag=True` to prevent aspiration pneumonia (`CASCADE` *NEJM* cohort `PMID: 19828530`; `PMID: 34387872`). |
+| **`DualSensoryLoss` Prosody (`115–118 WPM`, `+4.5–5.0 dB` Shelf, `3.5 s` VAD) & `>= 7:1` Contrast Cards** | `CompanionAndConcierge.handle_turn()` | Emits presbycusis speech-rate/consonant-boost metadata and `>= 7:1` contrast visual cards (`ACHIEVE` RCT *Lancet* 2023 `PMID: 37478886` / `NCT03243422`; `SENSE-Cog` `PMID: 30678952`, `PMID: 38861354`), plus high-contrast red/blue cup co-drinking prompts (`+84%` liquid intake in AD, `PMID: 14718033`). |
+| **Rolling `>= 40%` `Ikigai` Role-Reversal, `GDS 2–3` Seated `Cognicise`, & `TALK-Dem` 3-Card Grounding** | `CompanionAndConcierge.handle_turn()`, `advance_concierge()` | Enforces `>= 40%` advice-seeking *Ikigai* prompts (`JAGES` cohort `PMID: 29912336`, `PMID: 18635784`), restricts dual-task `Cognicise` (`NCGG` RCT `PMID: 29313970`) to seated `GDS 2–3` afternoon windows (downshifting to errorless musical sway `PMID: 39998061` on distress or `GDS >= 4`), Disambiguates paraphasic requests via 3 room-grounded cards (`TALK-Dem` `arXiv:2609.38371`; `MemoryLane` `arXiv:2611.19013`), and enforces SQLite `24h/7d` commerce velocity caps + `bvFTD` sweet/alcohol SKU blocks (`PMID: 21813792`). |
+
+### 3.4 Longitudinal Baseline & Pharmacovigilance Sentinel (`src/cimind/sentinel.py`)
+
+| Kernel Invariant | Code Seam | Primary Scientific & Engineering Evidence |
+| :--- | :--- | :--- |
+| **21-Day Intra-Patient `Median/MAD` Concordance & Afebrile Nocturia/Autonomic Drift** | `ClinicalSentinelCron.evaluate()`, `compute_circadian_rar()` | Computes non-parametric rest-activity rhythm metrics (`IS`, `IV`, `RA`, `M10`, `L5`: `PMID: 8776790`, `PMID: 10372697`) and requires `>= 2`-plane intra-patient `Median/MAD` concordance (`z_nocturia >= 2.0` plus `\|z_temp\|`, `z_rmssd`, `z_hr`, or `z_rr` shift, with indoor heatwave `> 24.5 °C` and houseguest confounder shields) to reduce `TIHM` single-sensor false alarms (`PMID: 29708949`, `PMID: 31504609`) while surfacing afebrile/hypothermic delirium precursors (`PMID: 24529429`, `PMID: 8827700`). |
+| **Sleep Apnea + Non-Dipper BP, *Wushui* Nap Paradox, & Gait+Speech Dual-Decliner** | `ClinicalSentinelCron.evaluate()` | Distinguishes brief restorative early-afternoon naps (`15–45 min` before `14:30`, `PMID: 33585772`) from longitudinal nap-duration escalation (`> 60 min` or `+15 min/yr`, *RUSH MAP* actigraphy cohort `PMID: 35297535`), flags concordant nocturnal `eAHI >= 15` + non-dipper blood pressure (`>= 0.95`, `PMID: 31801417`, `arXiv:2409.19217`, `arXiv:2501.15264`), and tracks dual gait-velocity + speech/IADL decline (`PMID: 32083688`, `PMID: 35639392`). |
+| **Interrupted Time-Series Pharmacovigilance (`PV-1..PV-6`)** | `ClinicalSentinelCron.evaluate()` | Freezes `[T0 - 21d, T0)` pre-prescription self-baselines to flag post-initiation drift across six geriatric drug hazards: `PV-1` ChEI bradycardia/syncope (`PMID: 19433700`); `PV-2` `ACB >= 3` circadian/cognitive drop (`PMID: 31233095`); `PV-3` antipsychotic parkinsonism (`PMID: 37139824`); `PV-4` orthostatic sway (`STOPPFall` `PMID: 33346797`); `PV-5` anti-amyloid mAb (`lecanemab`/`donanemab`) `ARIA` warning (`PMID: 36449413`, `PMID: 37459141`) with explicit **IV `tPA` thrombolytic fatal hemorrhage contraindication notice** (`PMID: 36599072`); and `PV-6` memantine `80%` renal-clearance drop under alkaline urine `pH >= 8.0` / urease UTI (`PMID: 9663856`). |
+| **Xuanwu `COAST-6` Human-Only Social Index, `t-HELP` Shield, & Care-Graph Routing** | `ClinicalSentinelCron.evaluate()` | Weights six protective lifestyle domains (`COAST` 10-year *BMJ* cohort `N = 29,072`, `PMID: 36696987`; `FINGER` `PMID: 25771249`; `U.S. POINTER` `PMID: 40730001`; weekend-warrior MVPA `PMID: 39213199`), **explicitly zeroing AI companion turns from social credit** (`ai_companion_turns_count` ignored so synthetic chat never substitutes for human contact). Activates a 14-day family `t-HELP` delirium-prevention shield (`PMID: 31633739`), tracks informant-vs-sensor discordance (`LASI-DAD` `PMID: 32609316`, `PMID: 37466967`), enforces a `<= 2/day` routine caregiver digest cap (informed by active caregiver micro-support RCTs `PMID: 18523642`), and steps down cron polling (`6h -> 12h -> 24h`) across quiet windows. |
+
+---
+
+## 4. Ground-Truth Implementation Matrix (`v0.2.0` Kernel vs. Hardware Adapter Roadmap)
+
+To support rigorous technical due diligence by grant reviewers, clinical collaborators, and semiconductor/hardware partners, the table below separates **verified code executing in `src/cimind/` today (`33/33` unit & E2E tests)** from **external adapter ports and physical bench milestones**:
+
+| Layer | Implemented & Verified in `CiMind v0.2.0` (`stdlib` Python) | External Adapter Seam / Hardware-in-the-Loop Validation Roadmap |
+| :--- | :--- | :--- |
+| **Audit & Storage** (`audit.py`, `mmu.py`) | Append-only WAL SQLite `AuditLedger` (`prev_sha256 -> entry_sha256` tamper verification), bi-temporal `Zone 1/2` supersession, HMAC-SHA256 `SignedMutation`, flash wear guard (`mmcblk` check), and durable `24h/7d` commerce velocity ledger. | Standard CPython `sqlite3` treats `PRAGMA key` as a no-op unless linked against `sqlcipher3` or hosted on LUKS2/dm-crypt NVMe. Hardware asymmetric signing (`Ed25519` / WebAuthn / `Nitrokey`) plugs into `SignatureVerifier`. |
+| **Episodic Memory** (`hindsight.py`, `mmu.py`) | `HindsightTransportPort`, `InMemoryHindsightAdapter`, stdlib HTTP client for self-hosted `vectorize-io/hindsight`, UTC window verifier (`confidence >= 0.90`), and 4-gate broadcast audio quarantine. | Upstream acoustic front-end (`WebRTC AEC3`, `Silero VAD`, dual-mic SNR estimation, speaker diarization) and persistent `PostgreSQL/pgvector` `Hindsight` daemon run externally to `cimind`. |
+| **Ambient & Wearable Sensing** (`reflex.py`, `circadian.py`, `geotrigger.py`) | Pure `< 5 ms` `SafetyReflexEngine`, 4-point CCT `m-EDI` solver, Home Assistant blueprint (`circadian_sundowning_guard.yaml`), ESPHome room lux/PIR/IR node template (`cimind_room_presence_node.yaml`), and ChirpStack v4 / TTS v3 / `wadamesh` LoRaWAN geofence parser & hysteresis engine. | Physical sensor drivers and RF/wearable benches in progress: `60 GHz` mmWave + `32x24` thermal + `2D LiDAR` (`Slamtec`) floor fusion, spectral `AS7341` `CIE S 026` SPD calibration, nocturnal `RMSSD`/temp OAuth2/BLE ingestion (`Ultrahuman UltraSignal`, `Circular Ring 3`), `Zigbee 3.0` (`SMLIGHT`, `ThirdReality`), and `868 MHz` LoRaWAN field link-budget trials (`RAKwireless`, `Heltec`, `HopeRF`). |
+| **Dialogue, Edge NPU & Embodiment** (`companion.py`, `appliance.py`) | Deterministic `GDS 1–7` / subtype policy reducer, `LanguageEnginePort`, `FulfillmentPort`, `DeterministicLanguageAdapter` (`EN`/`DE`/`ML`/`HI` templates), `PictogramCard` descriptors, and `ReachyMiniCue` safety envelopes. | Live quantized LLM/STT/TTS inference (`Parakeet`, `IndicConformer`, `Gemma`/`Qwen` on Apple Silicon or `Axelera Metis` NPU), `2–4 kHz` biquad presbycusis DSP (`biquadctl`), `Pollen Robotics Reachy Mini` (`actlatch`) actuator transport, and `LiveKit` / `sipgate` SIP caregiver voice/SMS/fax bridges connect via `Protocol` adapters. |
+
+---
+
+## 5. Offline Reproducibility & Verification
+
+Every invariant documented above can be audited offline without cloud credentials or attached hardware:
+
+```sh
+git clone https://github.com/TinkeringDao/CiMind.git
+cd CiMind
+uv sync --locked
+
+# Execute full Python 3.11+ test suite (33 unit & end-to-end invariant checks)
+uv run pytest -v
+
+# Run interactive subsystem verifiers
+uv run cimind doctor
+uv run cimind circadian --hour 9 --lux 120 --kelvin 4000
+uv run cimind reflex --hour 2 --bed-exit
+uv run cimind sentinel --simulate-afebrile-uti
+uv run cimind concierge --gds-stage 3 --amount-eur 24.0
+uv run cimind geotrigger --lat 48.138500 --lon 11.576000 --node-id rak4631-01 --sos
+```

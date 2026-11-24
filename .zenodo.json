@@ -1,0 +1,41 @@
+{
+  "title": "CiMind: Deterministic Epistemic Memory, Sub-5ms Ambient Safety Reflexes, and Longitudinal Drift Guards for Local-First Cognitive Care Research",
+  "description": "<p>Local-first, zero-cloud, cryptographically auditable Python reference kernel (<code>Apache-2.0</code>, standard library only) for aging-in-place and cognitive-impairment (<code>GDS 1&ndash;7</code>) smart-home and assistive robotics research.</p><p>Places four deterministic verification seams around untrusted local language models and residential sensors: (1) a 4-zone epistemic memory firewall preventing patient confabulation and broadcast-media RAG poisoning, (2) pure <code>&lt; 5 ms</code> camera-free fall-fusion, <code>590 nm</code> circadian pathway, and <code>868/915 MHz</code> LoRaWAN perimeter safety reflexes, (3) stage-, subtype- (<code>DLB</code>, <code>bvFTD</code>, dysphagia), and mother-tongue-adaptive (<code>L2 &rarr; L1</code>) dialogue and velocity-capped concierge rules, and (4) 21-day intra-patient <code>Median/MAD</code> longitudinal concordance and interrupted time-series pharmacovigilance (<code>PV-1..PV-6</code>) sentinels.</p><p>Non-commercial open-source research scaffold outside EU MDR <code>Regulation (EU) 2017/745</code> medical-device scope; see <code>LEGAL.md</code> and <code>docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md</code>.</p>",
+  "upload_type": "software",
+  "license": "apache-2.0",
+  "creators": [
+    {
+      "name": "Arackal Sanu, Vaisakhan",
+      "affiliation": "TinkeringDao Labs",
+      "orcid": "0009-0000-9750-8713"
+    }
+  ],
+  "keywords": [
+    "ambient-assisted-living",
+    "dementia-care-research",
+    "local-first-ai",
+    "epistemic-memory",
+    "deterministic-safety",
+    "lorawan",
+    "circadian-lighting",
+    "pharmacovigilance",
+    "home-assistant"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/TinkeringDao/CiMind",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "10.5281/zenodo.24504102",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-technicalnote"
+    },
+    {
+      "identifier": "https://tinkeringdao.dev/research/cimind/",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-technicalnote"
+    }
+  ]
+}
