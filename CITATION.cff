@@ -1,0 +1,55 @@
+cff-version: "1.2.0"
+title: "CiMind: Deterministic Epistemic Memory, Sub-5ms Ambient Safety Reflexes, and Longitudinal Drift Guards for Local-First Cognitive Care Research"
+message: "If you use CiMind or reference its safety and epistemic memory invariants in research or hardware evaluations, please cite this software using the metadata below."
+type: software
+version: "0.2.0"
+doi: "10.5281/zenodo.24504136"
+date-released: "2026-11-24"
+license: Apache-2.0
+repository-code: "https://github.com/TinkeringDao/CiMind"
+url: "https://tinkeringdao.dev/research/cimind/"
+abstract: >-
+  Local-first, zero-cloud, cryptographically auditable Python reference kernel
+  for aging-in-place and mild-to-advanced cognitive impairment (GDS 1-7)
+  smart-home research. Places deterministic verification seams—a four-zone
+  epistemic memory firewall, sub-5ms camera-free sensor-fusion safety and
+  LoRaWAN perimeter reflexes, stage- and mother-tongue-adaptive dialogue
+  constraints, and 21-day intra-patient Median/MAD longitudinal and
+  pharmacovigilance sentinels—around untrusted local language models and
+  multi-modal residential sensors.
+authors:
+  - family-names: "Arackal Sanu"
+    given-names: "Vaisakhan"
+    affiliation: "TinkeringDao Labs"
+    orcid: "https://orcid.org/0009-0000-9750-8713"
+contact:
+  - name: "TinkeringDao Labs"
+    email: "hello@tinkeringdao.dev"
+    website: "https://tinkeringdao.dev"
+identifiers:
+  - type: url
+    value: "https://tinkeringdao.dev/research/cimind/"
+    description: "TinkeringDao Labs Research Monograph & Architecture Whitepaper"
+keywords:
+  - ambient-assisted-living
+  - cognitive-care
+  - local-first-ai
+  - epistemic-memory
+  - deterministic-safety
+  - lorawan
+  - circadian-lighting
+  - pharmacovigilance
+  - open-source-hardware
+references:
+  - type: report
+    title: "CiMind: Deterministic Epistemic Memory, Sub-5ms Ambient Safety Reflexes, and Longitudinal Drift Guards for Local-First Cognitive Care Research"
+    authors:
+      - family-names: "Arackal Sanu"
+        given-names: "Vaisakhan"
+        orcid: "https://orcid.org/0009-0000-9750-8713"
+    institution:
+      name: "TinkeringDao Labs"
+    year: 2026
+    date-released: "2026-11-24"
+    doi: "10.5281/zenodo.24504102"
+    url: "https://doi.org/10.5281/zenodo.24504102"
