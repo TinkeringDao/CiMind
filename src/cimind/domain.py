@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum, StrEnum
@@ -56,6 +57,83 @@ class EpistemicZone(StrEnum):
     VERIFIED_BIOGRAPHY = "VerifiedBiography"
     SENSOR_EPISODE_BANK = "SensorEpisodeBank"
     PATIENT_UTTERANCE_QUARANTINE = "PatientUtteranceQuarantine"
+
+
+class EpistemicProvenance(StrEnum):
+    """Canonical epistemic provenance tags, context prefixes, and quarantine markers."""
+
+    BANK_CLINICAL_VAULT = "cimind_clinical_vault"
+    BANK_VERIFIED_BIO = "cimind_verified_bio"
+    BANK_SENSOR_EPISODES = "cimind_sensor_episodes"
+    BANK_PATIENT_QUARANTINE = "cimind_patient_utterances"
+    TAG_ZONE3_SENSOR = "epistemic:zone3_sensor"
+    TAG_ZONE4_QUARANTINE = "epistemic:zone4_quarantine"
+    TAG_TRUTH_FALSE = "epistemic_truth:false"
+    TAG_SIGNED_VERIFIED = "epistemic:signed_verified"
+    TAG_INCLUDE_QUARANTINE = "epistemic:include_quarantine"
+    CONTEXT_CLINICAL_VAULT = "cimind:clinical_vault:"
+    CONTEXT_VERIFIED_BIO = "cimind:verified_bio:"
+    CONTEXT_QUARANTINE = "cimind:quarantine:"
+    QUARANTINE_XML_OPEN = '<unverified_patient_expressions epistemic_truth="false">'
+    QUARANTINE_XML_CLOSE = "</unverified_patient_expressions>"
+
+
+BEREAVEMENT_TERMS: tuple[str, ...] = (
+    "passed away",
+    "no longer alive",
+    "is dead",
+    "was buried",
+    "funeral",
+    "deceased",
+    "died",
+    "dead",
+)
+
+ORAL_INTAKE_TERMS: tuple[str, ...] = (
+    "drink",
+    "water",
+    "soup",
+    "eat",
+    "tea",
+    "juice",
+    "coffee",
+    "sip",
+    "swallow",
+    "snack",
+    "food",
+    "beverage",
+    "pill",
+    "pills",
+    "tablet",
+    "tablets",
+    "capsule",
+    "capsules",
+)
+
+
+def contains_clinical_term(text: str, terms: tuple[str, ...]) -> bool:
+    """Check whether `text` contains any whole-word clinical term from `terms`."""
+    lowered = text.lower()
+    return any(re.search(rf"\b{re.escape(term)}\b", lowered) is not None for term in terms)
+
+
+def passes_broadcast_speech_quarantine(
+    *,
+    voice_activity_detected: bool,
+    transcript: str,
+    snr_db: float,
+    speaker_role: str,
+    tv_or_radio_active: bool,
+    near_to_far_field_db: float,
+) -> bool:
+    """Evaluate the 4-gate VAD/SNR/speaker-role/near-to-far broadcast media filter."""
+    if not voice_activity_detected or not transcript.strip():
+        return False
+    if snr_db < 3.0 or speaker_role.upper() == "BROADCAST_MEDIA":
+        return False
+    if tv_or_radio_active and near_to_far_field_db < 12.0:
+        return False
+    return True
 
 
 class CareRole(StrEnum):

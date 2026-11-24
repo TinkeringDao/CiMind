@@ -197,7 +197,9 @@ Importing or running `cimind` opens zero unsolicited network sockets and require
 | [`src/cimind/domain.py`](src/cimind/domain.py) | Canonical domain enums, `PatientCareProfile`, `VerifiedEffect` value objects, and `GERIATRIC_DRUG_CATALOG` |
 | [`src/cimind/mmu.py`](src/cimind/mmu.py) | 4-zone `EpistemicMemoryMMU`, `HindsightTransportPort`, signed bi-temporal `ClinicalVault`, and SQLite velocity ledger |
 | [`src/cimind/audit.py`](src/cimind/audit.py) | Append-only SQLite `AuditLedger` with `prev_sha256 -> entry_sha256` tamper verification |
-| [`src/cimind/hindsight.py`](src/cimind/hindsight.py) | HTTP/custom-transport client and UTC window verifier for self-hosted [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) |
+| [`src/cimind/hindsight.py`](src/cimind/hindsight.py) | HTTP/custom-transport client, UTC window verifier, and `v1` Healthcare Bank Template loader/validator for [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) |
+| [`src/cimind/hindsight_validator.py`](src/cimind/hindsight_validator.py) | Out-of-core `CiMindOperationValidator` (`HINDSIGHT_API_OPERATION_VALIDATOR_EXTENSION`) enforcing epistemic & clinical safety hooks |
+| [`src/cimind/templates/hindsight_healthcare_bank_template.json`](src/cimind/templates/hindsight_healthcare_bank_template.json) | Drop-in `v1` Healthcare & Cognitive-Care Bank Template manifest for Hindsight |
 | [`src/cimind/reflex.py`](src/cimind/reflex.py) | Pure `< 5 ms` `SafetyReflexEngine` (camera-free fall fusion, `590 nm` pathway, fail-safe geolock, GNSS handover, `HEAR` gate) |
 | [`src/cimind/circadian.py`](src/cimind/circadian.py) | `CIE S 026` melanopic Equivalent Daylight Illuminance (`m-EDI`) solver (`>= 250 m-EDI` daytime, `< 10 m-EDI` evening) |
 | [`src/cimind/geotrigger.py`](src/cimind/geotrigger.py) | WGS-84 Haversine 3-zone LoRaWAN (`ChirpStack` / `WisGate` / `The Things Stack`) geofence engine |
@@ -207,6 +209,7 @@ Importing or running `cimind` opens zero unsolicited network sockets and require
 | [`src/cimind/appliance.py`](src/cimind/appliance.py) | Top-level `CiMindAppliance` coordinator |
 | [`src/cimind/cli.py`](src/cimind/cli.py) | Offline diagnostic CLI (`doctor`, `circadian`, `reflex`, `sentinel`, `concierge`, `geotrigger`) |
 | [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md) | Primary-source clinical & engineering evidence matrix (`PMID` / `NCT` / `CIE S 026` / `arXiv`), non-MDR scope, and `v0.2.0` kernel-vs-adapter truth table |
+| [`docs/HINDSIGHT_HEALTHCARE_EXTENSION.md`](docs/HINDSIGHT_HEALTHCARE_EXTENSION.md) | Hindsight `v1` Healthcare Bank Template import guide and `CiMindOperationValidator` extension configuration |
 | [`docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md`](docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md) | Private LoRaWAN + `Reachy Mini` perimeter safety reference architecture |
 | [`blueprints/homeassistant/circadian_sundowning_guard.yaml`](blueprints/homeassistant/circadian_sundowning_guard.yaml) | Local Home Assistant circadian lighting & sundowning de-escalation blueprint |
 | [`esphome/cimind_room_presence_node.yaml`](esphome/cimind_room_presence_node.yaml) | Local ESPHome `BH1750` circadian illuminance, PIR wake motion, and IR appliance node template |
