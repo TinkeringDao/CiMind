@@ -10,7 +10,7 @@
 
 ## Overview
 
-`CiMind` ships two out-of-core, stdlib-clean integration surfaces for [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) (`v1` Bank Templates API and `OperationValidatorExtension` slot):
+`CiMind` is listed as a community framework integration in [`vectorize-io/hindsight`](https://github.com/vectorize-io/hindsight) ([`PR #6887`](https://github.com/vectorize-io/hindsight/pull/6887) · [`hindsight.vectorize.io/integrations`](https://hindsight.vectorize.io/integrations)) and ships two out-of-core, stdlib-clean integration surfaces (`v1` Bank Templates API and `OperationValidatorExtension` slot):
 
 1. **Drop-In Healthcare Bank Template (`v1` Manifest):** [`src/cimind/templates/hindsight_healthcare_bank_template.json`](../src/cimind/templates/hindsight_healthcare_bank_template.json) configures per-tag observation isolation (`default_observation_scopes: "per_tag"`), maximum epistemic skepticism (`disposition_skepticism: 5`), controlled non-writable entity labels (`tag: false`), three quarantine-fenced mental models (`verified-biography-and-communication`, `daily-routine-and-episodic-continuity`, `caregiver-handover-digest`), and five deterministic safety directives grounded in [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md).
 2. **`CiMindOperationValidator` (`cimind.hindsight_validator:CiMindOperationValidator`):** Dynamically subclasses `hindsight_api.extensions.OperationValidatorExtension` and returns native `ValidationResult` / `TagGroupNot` objects when imported inside the `hindsight-api` server or worker process, while remaining 100% usable standalone in pure Python `3.11+` standard library environments with zero `hindsight-api` dependency.
