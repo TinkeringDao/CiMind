@@ -664,8 +664,14 @@ _MYTH_M3_ESOTERIC_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:3d|4d|5d|third|fourth|fifth)\s*(?:->|→|to|into)?\s*(?:4d|5d|fourth|fifth)?"
-        r"\s*(?:density|dimension(?:al)?|vibration|ascension|shift|earth|consciousness)\b",
+        r"\b(?:"
+        r"(?:3d|4d|5d)\s*(?:->|→|to|into)?\s*(?:4d|5d|fourth|fifth)?"
+        r"\s*(?:density|dimension(?:al)?|vibration|ascension|shift|earth|consciousness)"
+        r"|(?:third|fourth|fifth)\s*(?:->|→|to|into)\s*(?:4d|5d|fourth|fifth)"
+        r"(?:\s*(?:density|dimension(?:al)?|vibration|ascension|shift|earth|consciousness))?"
+        r"|(?:fourth|fifth)\s+(?:density|dimension(?:al)?|vibration|ascension|consciousness)"
+        r"|(?:third)\s+(?:density|dimension(?:al)?\s+(?:ascension|shift|consciousness|vibration))"
+        r")\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -692,8 +698,8 @@ _CONTEMPLATIVE_HAZARD_RULES: tuple[tuple[ContemplativePracticeKind, re.Pattern[s
         re.compile(
             r"\b(?:kapalabhati|kapalbhati|bhastrika|tummo|wim\s+hof|holotropic"
             r"|rebirthing\s+breath\w*|breath\s+of\s+fire|forced\s+hyperventilation"
-            r"|rapid\s+hyperventilation|300\s*x\s*(?:rapid|fast|forceful)?\s*"
-            r"(?:breath(?:s|ing)?|exhal\w*|hyperventilat\w*)?"
+            r"|rapid\s+hyperventilation|300\s*x\s+(?:(?:rapid|fast|forceful)\s+)?"
+            r"(?:breath(?:s|ing)?|exhal\w*|hyperventilat\w*|kapalabhati|kapalbhati|bhastrika)"
             r"|hyperventilat\w*\s+(?:breathwork|technique|practice|round|cycle|session))\b",
             re.IGNORECASE,
         ),
@@ -886,7 +892,16 @@ _CRISIS_METAPHYSICS_PATTERN = re.compile(
 
 _SOMATIC_CRISIS_CUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
-        r"\b(?:heat|burning|fire|energy|electricity|surge|surging|shooting|rushing)\b"
+        r"\b(?:heat|burning|fire|energy|electricity|electric\w*|surge|surging|shooting|rushing"
+        r"|ascending|rising)\b[^.\n]{0,45}\b(?:spine|spinal)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:ascending|surging|shooting|rushing|electric(?:al)?)\s+"
+        r"(?:heat|burning|fire|energy|current|sensation|waves?)"
+        r"|(?:heat|burning(?:\s+sensation)?|fire|energy|electricity)\s+(?:is\s+)?"
+        r"(?:surging|shooting|rushing|rising|coursing|exploding)\s+"
+        r"(?:up|through|along|into|in))\b"
         r"[^.\n]{0,45}\b(?:spine|spinal|back|head|crown|body)\b",
         re.IGNORECASE,
     ),
@@ -1129,6 +1144,8 @@ def has_somatic_or_contemplative_crisis_cues(
     return (
         _REDFLAG_STROKE_PATTERN.search(text) is not None
         or _REDFLAG_SEIZURE_PATTERN.search(text) is not None
+        or _REDFLAG_DELIRIUM_PATTERN.search(text) is not None
+        or _REDFLAG_MANIA_PSYCHOSIS_CATATONIA_PATTERN.search(text) is not None
         or _REDFLAG_SYNCOPE_PATTERN.search(text) is not None
     )
 

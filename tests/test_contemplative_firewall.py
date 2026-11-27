@@ -245,8 +245,33 @@ def test_domain_classifiers_catch_myths_hazards_crises_with_zero_substring_false
             "the prescribing clinician."
         ),
         "Gut serotonin cannot cross the intact blood-brain barrier into brain tissue.",
+        "Caregiver works the third shift at the clinic.",
+        "Microscope at 300x magnification showed normal tissue staining.",
     ):
         assert classify_epistemic_corpus_violation(benign) is None, benign
+
+    # Normal household utterances must never trigger false-positive somatic crisis grounding
+    for normal_household in (
+        "Turn up the heat in the back room please.",
+        "I have low energy in my body today.",
+        "There is a nice fire in the back fireplace.",
+    ):
+        assert has_somatic_or_contemplative_crisis_cues(normal_household) is False, normal_household
+
+    # Real somatic/energy surge cues and delirium/mania/catatonia cues must still trigger
+    assert has_somatic_or_contemplative_crisis_cues("Energy is surging through my body.") is True
+    assert (
+        has_somatic_or_contemplative_crisis_cues(
+            "I have a grandiose mission and I am refusing food and water."
+        )
+        is True
+    )
+    assert (
+        has_somatic_or_contemplative_crisis_cues(
+            "Patient showed abrupt confusion and hypoactive stupor this morning."
+        )
+        is True
+    )
 
     # Somatic crisis cues & differential red-flag mapping
     severe_utterance = (
@@ -558,6 +583,37 @@ def test_t01_t02_t03_t04_validator_retain_epistemic_corpus_firewall(tmp_path) ->
     assert EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value in out_tags
     assert EpistemicProvenance.TAG_SIGNED_VERIFIED.value not in out_tags
     assert EpistemicProvenance.TAG_ZONE3_SENSOR.value not in out_tags
+
+    # Zone-4 mania/catatonia utterance gets safety:contemplative_crisis_event via validate_retain
+    mania_speech = asyncio.run(
+        validator.validate_retain(
+            RetainContext(
+                bank_id="cimind-care-01",
+                contents=[
+                    {
+                        "content": json.dumps(
+                            {
+                                "speaker_role": "PATIENT",
+                                "snr_db": 17.0,
+                                "tv_or_radio_active": False,
+                                "near_to_far_field_db": 19.0,
+                                "transcript": (
+                                    "I have a grandiose mission and I am refusing food and water."
+                                ),
+                                "voice_activity_detected": True,
+                            }
+                        ),
+                        "context": "cimind:quarantine:PATIENT:en-US",
+                    }
+                ],
+            )
+        )
+    )
+    assert mania_speech.allowed is True
+    assert mania_speech.contents is not None
+    assert (
+        EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value in mania_speech.contents[0]["tags"]
+    )
 
     # Pre-tagged Zone 4 crisis speech from MMU is accepted, while non-speech crisis tag is rejected
     pretagged_crisis = asyncio.run(
