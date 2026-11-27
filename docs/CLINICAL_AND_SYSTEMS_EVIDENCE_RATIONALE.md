@@ -1,7 +1,7 @@
 # Clinical & Systems Evidence Rationale (`TinkeringDao/CiMind`)
 
-**Package Version:** `0.2.0` (`Python >= 3.11`, zero third-party runtime dependencies)  
-**Archival Whitepaper DOI:** [`10.5281/zenodo.24504102`](https://doi.org/10.5281/zenodo.24504102) · **Software Release DOI:** [`10.5281/zenodo.24504136`](https://doi.org/10.5281/zenodo.24504136)  
+**Package Version:** `0.3.0` (`Python >= 3.11`, zero third-party runtime dependencies)  
+**Archival Whitepaper DOI:** [`10.5281/zenodo.24593980`](https://doi.org/10.5281/zenodo.24593980) (All versions: [`10.5281/zenodo.24504101`](https://doi.org/10.5281/zenodo.24504101)) · **Software Concept DOI:** [`10.5281/zenodo.24504135`](https://doi.org/10.5281/zenodo.24504135)  
 **Repository:** `https://github.com/TinkeringDao/CiMind`  
 **Organization:** `TinkeringDao Labs` (`https://tinkeringdao.dev` · Bavaria, Germany)  
 **Code License:** `Apache-2.0` · **Documentation License:** `CC-BY-4.0`
@@ -81,11 +81,11 @@ Every deterministic rule in `src/cimind/` traces directly to primary clinical tr
 
 ---
 
-## 4. Ground-Truth Implementation Matrix (`v0.2.0` Kernel vs. Hardware Adapter Roadmap)
+## 4. Ground-Truth Implementation Matrix (`v0.3.0` Kernel vs. Hardware Adapter Roadmap)
 
 To support rigorous technical due diligence by grant reviewers, clinical collaborators, and semiconductor/hardware partners, the table below separates **verified code executing in `src/cimind/` today (`59` unit & E2E invariant tests)** from **external adapter ports and physical bench milestones**:
 
-| Layer | Implemented & Verified in `CiMind v0.2.0` (`stdlib` Python) | External Adapter Seam / Hardware-in-the-Loop Validation Roadmap |
+| Layer | Implemented & Verified in `CiMind v0.3.0` (`stdlib` Python) | External Adapter Seam / Hardware-in-the-Loop Validation Roadmap |
 | :--- | :--- | :--- |
 | **Audit & Storage** (`audit.py`, `mmu.py`) | Append-only WAL SQLite `AuditLedger` (`prev_sha256 -> entry_sha256` tamper verification), bi-temporal `Zone 1/2` supersession, HMAC-SHA256 `SignedMutation`, flash wear guard (`mmcblk` check), and durable `24h/7d` commerce velocity ledger. | Standard CPython `sqlite3` treats `PRAGMA key` as a no-op unless linked against `sqlcipher3` or hosted on LUKS2/dm-crypt NVMe. Hardware asymmetric signing (`Ed25519` / WebAuthn / `Nitrokey`) plugs into `SignatureVerifier`. |
 | **Episodic Memory** (`hindsight.py`, `hindsight_validator.py`, `mmu.py`) | `HindsightTransportPort`, `InMemoryHindsightAdapter`, stdlib HTTP client, drop-in `v1` Healthcare Bank Template JSON, `CiMindOperationValidator` (`HINDSIGHT_API_OPERATION_VALIDATOR_EXTENSION`), UTC window verifier (`confidence >= 0.90`), and 4-gate broadcast audio quarantine. | Upstream acoustic front-end (`WebRTC AEC3`, `Silero VAD`, dual-mic SNR estimation, speaker diarization) and persistent `PostgreSQL/pgvector` `Hindsight` daemon run externally to `cimind`. |

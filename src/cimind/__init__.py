@@ -213,4 +213,4 @@ __all__ = [
     "validate_bank_template_manifest",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

@@ -1,8 +1,8 @@
 # Hindsight Healthcare Bank Template & `CiMindOperationValidator` Extension
 
-**Package Version:** `CiMind v0.2.0` (`Python >= 3.11`, zero mandatory third-party dependencies)  
+**Package Version:** `CiMind v0.3.0` (`Python >= 3.11`, zero mandatory third-party dependencies)  
 **Author:** Vaisakhan Arackal Sanu (`ORCID:` [`0009-0000-9750-8713`](https://orcid.org/0009-0000-9750-8713)) · **TinkeringDao Labs** (`https://tinkeringdao.dev`)  
-**Archival Whitepaper DOI:** [`10.5281/zenodo.24504102`](https://doi.org/10.5281/zenodo.24504102) · **Software Release DOI:** [`10.5281/zenodo.24504136`](https://doi.org/10.5281/zenodo.24504136)
+**Archival Whitepaper DOI:** [`10.5281/zenodo.24593980`](https://doi.org/10.5281/zenodo.24593980) (All versions: [`10.5281/zenodo.24504101`](https://doi.org/10.5281/zenodo.24504101)) · **Software Concept DOI:** [`10.5281/zenodo.24504135`](https://doi.org/10.5281/zenodo.24504135)
 
 > **Nominative Fair Use & Non-MDSW Scope Notice:** Independent open-source project by **TinkeringDao Labs**; not affiliated with or endorsed by **Vectorize, Inc.** (`Hindsight` is referenced strictly to indicate interoperability under `Art. 14(1)(c) EUTMR` and `§ 23 Abs. 1 Nr. 3 MarkenG`; see [`LEGAL.md`](../LEGAL.md)). `CiMind` operates exclusively within the non-medical-device assistive research and caregiver-coordination boundary (`Regulation (EU) 2017/745` `Art. 2(1)`, `MDCG 2019-11 Rev. 1`; see [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md)).
 

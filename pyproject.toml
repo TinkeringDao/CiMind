@@ -1,6 +1,6 @@
 [project]
 name = "cimind"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first, agent-agnostic, auditable cognitive prosthetic and smart-home care kernel for dementia and Alzheimer's care"
 readme = "README.md"
 requires-python = ">=3.11"
