@@ -182,6 +182,10 @@ QUARANTINE_AND_UNTRUSTED_EXCLUSION_TAGS: tuple[str, ...] = (
 )
 
 
+NON_PRESCRIPTIVE_CLINICIAN_BANNER = (
+    "Do NOT stop or change prescribed medications without speaking to the prescribing clinician."
+)
+
 BEREAVEMENT_TERMS: tuple[str, ...] = (
     "passed away",
     "no longer alive",
