@@ -758,7 +758,7 @@ def test_t17_appliance_e2e_stage4_quarantine_durable_72h_cooldown_and_signed_cle
     assert mild_alerts[0].alert_code == "CONTEMPLATIVE_HYPERAROUSAL_COOLDOWN_ALERT"
 
     # Verify crisis utterance was stored in Zone 4 with safety:contemplative_crisis_event
-    q_bank = hindsight._banks.get(EpistemicProvenance.BANK_PATIENT_QUARANTINE.value, [])
+    q_bank = hindsight.recall(EpistemicProvenance.BANK_PATIENT_QUARANTINE.value, "")
     assert len(q_bank) == 1
     assert EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value in q_bank[0]["tags"]
     assert EpistemicProvenance.TAG_ZONE4_QUARANTINE.value in q_bank[0]["tags"]
@@ -1074,3 +1074,103 @@ def test_additional_edge_cases_chair_mobility_donanemab_st_johns_wort_and_dyspha
     )
     assert any(f.rule_id == "PV-7" for f in rep_sjw.iatrogenic_findings)
     assert "UNRESPONSIVE_STUPOR_OR_CATATONIA_ALERT" in {a.alert_code for a in rep_sjw.alerts}
+
+
+def test_verifier_regressions_eyes_closed_scrub_dysphagia_hostile_and_dlb_dim_daytime() -> None:
+    # 1. Hostile LLM emitting "close your eyes" on 0.1 Hz / Kirtan Kriya / crisis grounding scrubbed
+    hostile_eyes_closed = _HostileContemplativeLanguageEngine(
+        "Keep your eyes open and feet flat, then close your eyes and do a body scan."
+    )
+    comp_eyes = CompanionAndConcierge(language_engine=hostile_eyes_closed)
+
+    dlb_day = PatientCareProfile(
+        patient_id="pat-dlb-eyes",
+        gds_stage=GdsStage.GDS_3,
+        pathologies=frozenset({PathologyFlag.LEWY_BODY}),
+    )
+    res_dlb_01 = comp_eyes.handle_turn(
+        TurnInput(
+            utterance="",
+            local_hour=11,
+            ambient_lux=240.0,
+            ritual_trigger="PACED_BREATHING_0_1HZ",
+        ),
+        _make_context(dlb_day),
+    )
+    assert "close your eyes" not in res_dlb_01.prompt_effect.spoken_text.lower()
+    assert "body scan" not in res_dlb_01.prompt_effect.spoken_text.lower()
+
+    trauma_kk = PatientCareProfile(
+        patient_id="pat-trauma-kk",
+        gds_stage=GdsStage.GDS_3,
+        contemplative_vulnerabilities=frozenset(
+            {ContemplativeVulnerabilityFlag.TRAUMA_OR_PTSD_HISTORY}
+        ),
+    )
+    res_kk_eyes = comp_eyes.handle_turn(
+        TurnInput(utterance="", ritual_trigger="KIRTAN_KRIYA"),
+        _make_context(trauma_kk),
+    )
+    assert "close your eyes" not in res_kk_eyes.prompt_effect.spoken_text.lower()
+
+    res_crisis_eyes = comp_eyes.handle_turn(
+        TurnInput(utterance="Burning heat is surging up my spine and I feel unreal."),
+        _make_context(trauma_kk),
+    )
+    assert res_crisis_eyes.crisis_grounding_triggered is True
+    assert "close your eyes" not in res_crisis_eyes.prompt_effect.spoken_text.lower()
+    assert "eyes open" in res_crisis_eyes.prompt_effect.spoken_text.lower()
+
+    # 2. GDS < 7 with DYSPHAGIA_OR_ASPIRATION_RISK scrubs hostile LLM oral terms on HYDRATION
+    # and VESTIBULE_REDIRECT
+    hostile_oral = _HostileContemplativeLanguageEngine(
+        "Come inside and sip a warm cup of tea and drink some water."
+    )
+    comp_oral = CompanionAndConcierge(language_engine=hostile_oral)
+    dys_gds3 = PatientCareProfile(
+        patient_id="pat-dys-gds3-hostile",
+        gds_stage=GdsStage.GDS_3,
+        contemplative_vulnerabilities=frozenset(
+            {ContemplativeVulnerabilityFlag.DYSPHAGIA_OR_ASPIRATION_RISK}
+        ),
+    )
+    for trig in ("HYDRATION", "VESTIBULE_REDIRECT"):
+        res_dys = comp_oral.handle_turn(
+            TurnInput(utterance="", ritual_trigger=trig),
+            _make_context(dys_gds3),
+        )
+        assert res_dys.oral_prompt_blocked is True, trig
+        assert not contains_clinical_term(res_dys.prompt_effect.spoken_text, ORAL_INTAKE_TERMS)
+
+    # 3. LewyBody at dim daytime (80 lux: >= 30 lux, < 150 lux) freezes actuators when
+    # RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED fires, while normal conversation stays unfrozen
+    comp_default = CompanionAndConcierge(language_engine=DeterministicLanguageAdapter())
+    for trig in ("PACED_BREATHING_0_1HZ", "GROUNDED_RELAXATION"):
+        res_dim = comp_default.handle_turn(
+            TurnInput(
+                utterance="",
+                local_hour=11,
+                ambient_lux=80.0,
+                ritual_trigger=trig,
+            ),
+            _make_context(dlb_day),
+        )
+        assert res_dim.contemplative_decision is not None
+        assert (
+            res_dim.contemplative_decision.policy_rule_id
+            == "RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED"
+        )
+        assert res_dim.prompt_effect.motor_frozen is True, trig
+        assert res_dim.prompt_effect.pre_speech_gaze_lead_ms == 0, trig
+
+    res_conv_dim = comp_default.handle_turn(
+        TurnInput(
+            utterance="Good morning.",
+            local_hour=11,
+            ambient_lux=80.0,
+            ritual_trigger="CONVERSATION",
+        ),
+        _make_context(dlb_day),
+    )
+    assert res_conv_dim.prompt_effect.motor_frozen is False
+    assert res_conv_dim.prompt_effect.pre_speech_gaze_lead_ms == 300

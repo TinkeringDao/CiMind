@@ -83,7 +83,7 @@ Every deterministic rule in `src/cimind/` traces directly to primary clinical tr
 
 ## 4. Ground-Truth Implementation Matrix (`v0.2.0` Kernel vs. Hardware Adapter Roadmap)
 
-To support rigorous technical due diligence by grant reviewers, clinical collaborators, and semiconductor/hardware partners, the table below separates **verified code executing in `src/cimind/` today (`58` unit & E2E invariant tests)** from **external adapter ports and physical bench milestones**:
+To support rigorous technical due diligence by grant reviewers, clinical collaborators, and semiconductor/hardware partners, the table below separates **verified code executing in `src/cimind/` today (`59` unit & E2E invariant tests)** from **external adapter ports and physical bench milestones**:
 
 | Layer | Implemented & Verified in `CiMind v0.2.0` (`stdlib` Python) | External Adapter Seam / Hardware-in-the-Loop Validation Roadmap |
 | :--- | :--- | :--- |
@@ -103,7 +103,7 @@ git clone https://github.com/TinkeringDao/CiMind.git
 cd CiMind
 uv sync --locked
 
-# Execute full Python 3.11+ test suite (58 unit & end-to-end invariant checks)
+# Execute full Python 3.11+ test suite (59 unit & end-to-end invariant checks)
 uv run pytest -v
 
 # Run interactive subsystem verifiers

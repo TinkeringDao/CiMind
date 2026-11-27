@@ -118,6 +118,15 @@ _CONTEMPLATIVE_PRACTICE_TO_RITUAL: dict[ContemplativePracticeKind, str] = {
     ContemplativePracticeKind.FAMILIAR_MUSIC_AND_SWAY: "ERRORLESS_MUSICAL_SWAY",
 }
 
+_STRUCTURED_CONTEMPLATIVE_RITUALS: frozenset[str] = frozenset(
+    {
+        "PACED_BREATHING_0_1HZ",
+        "SEATED_KIRTAN_KRIYA",
+        "GROUNDED_EXTERIOR_RELAXATION",
+        "SEATED_CHAIR_MOBILITY",
+    }
+)
+
 
 @dataclass(frozen=True)
 class ContemplativeGateDecision:
@@ -1047,6 +1056,7 @@ class CompanionAndConcierge:
         ritual_kind: str,
         crisis_triggered: bool,
         contemplative_downshifted: bool,
+        contemplative_decision: ContemplativeGateDecision | None,
         has_dysphagia: bool,
     ) -> tuple[str, bool]:
         """Deterministically scrub hazards, myths, collusion, labels, and oral cues."""
@@ -1063,6 +1073,7 @@ class CompanionAndConcierge:
                 or has_contemplative_crisis_metaphysics(spoken)
                 or _SUPERNATURAL_CRISIS_TERMS_PATTERN.search(spoken) is not None
                 or _CRISIS_DIAGNOSTIC_LABEL_PATTERN.search(spoken) is not None
+                or _EYES_CLOSED_CUE_PATTERN.search(spoken) is not None
                 or "?" in spoken
                 or (has_dysphagia and _contains_any_term(spoken, _ORAL_INTAKE_TERMS))
                 or "eyes open" not in lowered
@@ -1080,19 +1091,16 @@ class CompanionAndConcierge:
         unsafe_corpus = classify_epistemic_corpus_violation(
             spoken
         ) is not None or has_contemplative_crisis_metaphysics(spoken)
-        unsafe_practice_draft = ritual_kind in {
-            "PACED_BREATHING_0_1HZ",
-            "SEATED_KIRTAN_KRIYA",
-            "GROUNDED_EXTERIOR_RELAXATION",
-            "SEATED_CHAIR_MOBILITY",
-        } and (
-            _FORBIDDEN_CURE_OR_HOLD_PATTERN.search(spoken) is not None
-            or _SUPERNATURAL_CRISIS_TERMS_PATTERN.search(spoken) is not None
-            or (
-                ritual_kind == "GROUNDED_EXTERIOR_RELAXATION"
-                and _EYES_CLOSED_CUE_PATTERN.search(spoken) is not None
+        require_eyes_open = (
+            contemplative_decision is not None and contemplative_decision.require_eyes_open
+        ) or ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS
+        unsafe_practice_draft = (
+            ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS
+            and (
+                _FORBIDDEN_CURE_OR_HOLD_PATTERN.search(spoken) is not None
+                or _SUPERNATURAL_CRISIS_TERMS_PATTERN.search(spoken) is not None
             )
-        )
+        ) or (require_eyes_open and _EYES_CLOSED_CUE_PATTERN.search(spoken) is not None)
 
         if unsafe_corpus or unsafe_practice_draft:
             if profile.gds_stage == GdsStage.GDS_7 or ritual_kind == "SENSORY_PALLIATIVE_COMFORT":
@@ -1102,18 +1110,20 @@ class CompanionAndConcierge:
                     "Let us simply relax in the chair and sway gently together "
                     "to this warm familiar melody."
                 )
-            elif ritual_kind in {
-                "PACED_BREATHING_0_1HZ",
-                "SEATED_KIRTAN_KRIYA",
-                "GROUNDED_EXTERIOR_RELAXATION",
-                "SEATED_CHAIR_MOBILITY",
-            }:
+            elif ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS:
                 safe_text = DeterministicLanguageAdapter().generate_reply(req)
             else:
                 safe_text = "Let us stay grounded right here together with calm, ordinary comfort."
             if antimed_hit and profile.gds_stage < GdsStage.GDS_7:
                 safe_text = f"{safe_text} {NON_PRESCRIPTIVE_CLINICIAN_BANNER}"
             spoken = safe_text
+
+        if has_dysphagia and _contains_any_term(spoken, _ORAL_INTAKE_TERMS):
+            oral_blocked_extra = True
+            if profile.gds_stage == GdsStage.GDS_7 or ritual_kind == "SENSORY_PALLIATIVE_COMFORT":
+                spoken = "You are safe and comfortable right here with gentle calming music."
+            else:
+                spoken = "Let us stay comfortable right here together and relax with gentle music."
 
         if (
             ritual_kind == "PACED_BREATHING_0_1HZ"
@@ -1263,7 +1273,11 @@ class CompanionAndConcierge:
                 ritual_kind = "SOCIAL_CO_DRINKING"
                 cards = _social_co_drinking_cards()
         elif turn.ritual_trigger == "VESTIBULE_REDIRECT":
-            ritual_kind = "VESTIBULE_TEA_REDIRECT"
+            if has_dysphagia:
+                oral_blocked = True
+                ritual_kind = "ERRORLESS_MUSICAL_SWAY"
+            else:
+                ritual_kind = "VESTIBULE_TEA_REDIRECT"
         elif turn.ritual_trigger == "IKIGAI":
             ritual_kind = "IKIGAI_ROLE_REVERSAL"
             ikigai_applied = True
@@ -1352,12 +1366,19 @@ class CompanionAndConcierge:
             ritual_kind=ritual_kind,
             crisis_triggered=crisis_triggered,
             contemplative_downshifted=contemplative_downshifted,
+            contemplative_decision=contemplative_decision,
             has_dysphagia=has_dysphagia,
         )
         oral_blocked = oral_blocked or oral_scrubbed
 
         is_dark_or_night = turn.ambient_lux < 30.0 or turn.local_hour >= 21 or turn.local_hour < 6
-        dlb_dark_freeze = PathologyFlag.LEWY_BODY in profile.pathologies and is_dark_or_night
+        dlb_low_lux_contemplative_block = (
+            contemplative_decision is not None
+            and contemplative_decision.policy_rule_id == "RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED"
+        )
+        dlb_dark_freeze = (
+            PathologyFlag.LEWY_BODY in profile.pathologies and is_dark_or_night
+        ) or dlb_low_lux_contemplative_block
         has_dsl = PathologyFlag.DUAL_SENSORY_LOSS in profile.pathologies
 
         motor_frozen = dlb_dark_freeze
