@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from cimind.audit import AuditLedger
-from cimind.domain import parse_iso_utc
+from cimind.domain import EpistemicViolationError, bank_matches_allowed_prefixes, parse_iso_utc
 
 DEFAULT_HINDSIGHT_BASE_URL = "http://127.0.0.1:8888/v1/default"
 HEALTHCARE_TEMPLATE_FILENAME = "hindsight_healthcare_bank_template.json"
@@ -476,10 +476,23 @@ class HindsightMemoryBank:
         base_url: str | None = None,
         transport: HindsightTransport | None = None,
         audit_ledger: AuditLedger | None = None,
+        allowed_bank_prefixes: tuple[str, ...] | None = None,
     ) -> None:
         if not bank_id or not bank_id.strip():
             raise ValueError("bank_id must be a non-empty string")
         self.bank_id = bank_id.strip()
+        if allowed_bank_prefixes is not None:
+            normalized_prefixes = tuple(p.strip() for p in allowed_bank_prefixes if p.strip())
+            if not normalized_prefixes:
+                raise ValueError("allowed_bank_prefixes must contain at least one non-empty prefix")
+            if not bank_matches_allowed_prefixes(self.bank_id, normalized_prefixes):
+                raise EpistemicViolationError(
+                    f"Bank '{self.bank_id}' is outside allowed namespace prefixes "
+                    f"{normalized_prefixes}."
+                )
+            self.allowed_bank_prefixes: tuple[str, ...] | None = normalized_prefixes
+        else:
+            self.allowed_bank_prefixes = None
         resolved_url = base_url or os.environ.get(
             "CIMIND_MEMORY_ENDPOINT", DEFAULT_HINDSIGHT_BASE_URL
         )

@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from cimind.audit import AuditEntry
 from cimind.companion import CompanionAndConcierge, TurnInput, TurnResult
 from cimind.domain import (
     CareGraphMember,
+    ContemplativeVulnerabilityFlag,
+    EpistemicProvenance,
     PathwayAndAmbientEffect,
     VerifiedEffect,
 )
-from cimind.mmu import EpistemicMemoryMMU, HindsightTransportPort
+from cimind.mmu import DiarizedSpeechObservation, EpistemicMemoryMMU, HindsightTransportPort
 from cimind.reflex import EgressMode, ReflexFrame, ReflexState, ReflexTransition, SafetyReflexEngine
 from cimind.sentinel import (
     ClinicalSentinelCron,
@@ -63,6 +65,9 @@ class CiMindAppliance:
         self._reflex_state = ReflexState()
         self._sentinel_state = SentinelCronState()
         self._last_active_modalities: frozenset[str] = frozenset({"pvdf_bed_bcg", "mmwave_60ghz"})
+        self._dynamic_contemplative_vulnerabilities: frozenset[ContemplativeVulnerabilityFlag] = (
+            frozenset()
+        )
 
     def close(self) -> None:
         self.mmu.close()
@@ -132,19 +137,71 @@ class CiMindAppliance:
             active_modalities=self._last_active_modalities,
             topic_query=turn.utterance,
         )
+        if self._dynamic_contemplative_vulnerabilities:
+            merged_vulns = (
+                ctx.profile.contemplative_vulnerabilities
+                | self._dynamic_contemplative_vulnerabilities
+            )
+            if merged_vulns != ctx.profile.contemplative_vulnerabilities:
+                ctx = replace(
+                    ctx,
+                    profile=replace(ctx.profile, contemplative_vulnerabilities=merged_vulns),
+                )
+
         result = self.companion.handle_turn(turn, ctx)
+
+        if result.crisis_grounding_triggered:
+            if turn.utterance.strip():
+                self.mmu.ingest_observation(
+                    DiarizedSpeechObservation(
+                        timestamp_utc=now_utc,
+                        speaker_role="PATIENT",
+                        snr_db=18.0,
+                        tv_or_radio_active=False,
+                        near_to_far_field_db=20.0,
+                        transcript=turn.utterance,
+                        detected_language=turn.detected_language,
+                        word_finding_pause_ms=turn.word_finding_pause_ms,
+                        voice_activity_detected=True,
+                        sensor_id="companion-crisis-turn",
+                        extra_tags=result.quarantine_crisis_tags
+                        or (EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value,),
+                    )
+                )
+            cooldown_hours = result.recommended_cooldown_hours or 72
+            reason_suffix = (
+                ",".join(flag.value for flag in result.crisis_red_flags)
+                if result.crisis_red_flags
+                else "transient_somatic_hyperarousal"
+            )
+            self.mmu.set_contemplative_cooldown(
+                patient_id=ctx.profile.patient_id,
+                now_utc=now_utc,
+                hours=cooldown_hours,
+                reason=f"crisis_grounding:{reason_suffix}",
+            )
+
         self.mmu.append_audit(
             actor_id="cimind-companion",
             action_type=f"COMPANION_TURN:{result.prompt_effect.ritual_kind}",
             evidence_ids=("epistemic-context",),
-            policy_rule_id="RULE_THERAPEUTIC_MODE_GOVERNED",
+            policy_rule_id=(
+                "RULE_CONTEMPLATIVE_CRISIS_GROUNDING"
+                if result.crisis_grounding_triggered
+                else "RULE_THERAPEUTIC_MODE_GOVERNED"
+            ),
             payload={
                 "therapeutic_mode": result.prompt_effect.therapeutic_mode.value,
                 "language_bcp47": result.prompt_effect.language_bcp47,
                 "l1_pivoted": result.l1_regression_pivoted,
                 "motor_frozen": result.prompt_effect.motor_frozen,
+                "crisis_grounding_triggered": result.crisis_grounding_triggered,
+                "crisis_red_flags": [flag.value for flag in result.crisis_red_flags],
+                "recommended_cooldown_hours": result.recommended_cooldown_hours,
             },
-            result_status="DELIVERED",
+            result_status=(
+                "CRISIS_GROUNDED_COOLDOWN_SET" if result.crisis_grounding_triggered else "DELIVERED"
+            ),
             timestamp_utc=now_utc,
         )
         return result
@@ -194,6 +251,7 @@ class CiMindAppliance:
             state=self._sentinel_state,
         )
         self._sentinel_state = report.next_state
+        self._dynamic_contemplative_vulnerabilities = report.active_contemplative_vulnerabilities
         self.mmu.append_audit(
             actor_id="cimind-sentinel-cron",
             action_type="SENTINEL_WINDOW_EVALUATED",
@@ -203,6 +261,9 @@ class CiMindAppliance:
                 "alerts": [a.alert_code for a in report.alerts],
                 "iatrogenic_findings": [f.rule_id for f in report.iatrogenic_findings],
                 "delirium_shield_active": report.delirium_shield_active,
+                "active_contemplative_vulnerabilities": sorted(
+                    v.value for v in report.active_contemplative_vulnerabilities
+                ),
                 "next_wakeup_seconds": report.next_wakeup_seconds,
             },
             result_status="EVALUATED",

@@ -15,10 +15,10 @@ Local-first, zero-cloud, auditable cognitive prosthetic and ambient-safety kerne
 
 | Assistive-Care Failure Mode | Deterministic `CiMind` Guardrail | Module |
 | :--- | :--- | :--- |
-| Confabulated medication claims, TV dialogue bleed, or phantom sensor assumptions | Four isolated epistemic zones (`ClinicalVault`, `VerifiedBiography`, `SensorEpisodeBank`, `PatientUtteranceQuarantine`), 4-gate VAD/SNR/near-field broadcast filter, and explicit `UnobservedModalitiesHeader` | [`src/cimind/mmu.py`](src/cimind/mmu.py) |
+| Confabulated medication claims, TV dialogue bleed, unvetted external transcripts, or phantom sensor assumptions | Four isolated epistemic zones (`ClinicalVault`, `VerifiedBiography`, `SensorEpisodeBank`, `PatientUtteranceQuarantine`), 4-gate VAD/SNR/near-field broadcast filter, code-enforced Epistemic Corpus Firewall (bank-namespace allowlist, cross-bank prompt-echo & molecular-myth blocks, durable `72h` post-crisis cooldown), and explicit `UnobservedModalitiesHeader` | [`src/cimind/mmu.py`](src/cimind/mmu.py), [`src/cimind/hindsight_validator.py`](src/cimind/hindsight_validator.py) |
 | NPU/LLM inference stalls on fall detection, nighttime wandering, or perimeter locks | Pure `< 5 ms`, zero-I/O reducer evaluating camera-free `2-of-3` floor fusion (`60 GHz mmWave` + `32x24` thermal + `15 cm dToF`/piezo), `590 nm` bed-exit strip, `0V` fail-safe geolock cutouts, and 4-state `BLE/UWB -> LoRaWAN GNSS` handover | [`src/cimind/reflex.py`](src/cimind/reflex.py) |
-| Reality-orientation quizzes, bereavement re-traumatization, `L2` attrition, or impulsive purchases | Stage-governed `TherapeuticMode` (`PeerCoPilot` -> `GuidedConcierge` -> 3-step `IntegrativeValidation` -> dysphagia-safe `SensoryPalliative`), intra-turn `L2 -> L1` mother-tongue pivot, `>= 40%` `Ikigai` role-reversal quota, seated `GDS <= 3` `Cognicise`, and velocity-capped 3-card `Co-Agency Concierge` | [`src/cimind/companion.py`](src/cimind/companion.py) |
-| Afebrile UTIs, prescribing cascades (`ChEI -> antimuscarinic`), or single-sensor alarm fatigue | `21`-day intra-patient `Median/MAD` (`\|z\| >= 2.5`) `>= 2`-plane concordance, Interrupted Time-Series `Iatrogenic Drift Sentinel` (`PV-1..PV-6`), `COAST-6` human-only social scoring, `t-HELP` 14-day delirium shield, and `<= 2/day` routine digest cap | [`src/cimind/sentinel.py`](src/cimind/sentinel.py) |
+| Reality-orientation quizzes, bereavement re-traumatization, hazardous breathwork/esoteric claims, or impulsive purchases | Stage-governed `TherapeuticMode`, intra-turn `L2 -> L1` pivot, `>= 40%` `Ikigai` quota, seated `GDS <= 3` `Cognicise`, Contemplative Safety Envelope (`0.1 Hz` zero-hold pacing & `12-min` secular `Kirtan Kriya` vs. zero-override hazard blocks), 4-stage Somatic Crisis Reality-Grounding & differential triage, and velocity-capped 3-card `Co-Agency Concierge` | [`src/cimind/companion.py`](src/cimind/companion.py) |
+| Afebrile UTIs, prescribing cascades (`ChEI -> antimuscarinic`), serotonergic toxicity, `>= 48h` insomnia, or single-sensor alarm fatigue | `21`-day intra-patient `Median/MAD` (`\|z\| >= 2.5`) `>= 2`-plane concordance, Interrupted Time-Series `Iatrogenic Drift Sentinel` (`PV-1..PV-7`), `SLEEP_DEPRIVATION_48H` & stupor/catatonia mimicry guards, `COAST-6` human-only social scoring, `t-HELP` 14-day delirium shield, and `<= 2/day` routine digest cap | [`src/cimind/sentinel.py`](src/cimind/sentinel.py) |
 
 ---
 
@@ -31,7 +31,7 @@ flowchart TD
     Appliance["CiMindAppliance (src/cimind/appliance.py)<br/>Routes real-time frames, speech turns, concierge actions & cron windows"]
     Reflex["SafetyReflexEngine (src/cimind/reflex.py)<br/>Pure &lt;5ms zero-I/O safety &amp; egress reducer"]
     Companion["CompanionAndConcierge (src/cimind/companion.py)<br/>GDS 1-7 dialogue, L2-&gt;L1 pivot &amp; 3-card concierge"]
-    Sentinel["ClinicalSentinelCron (src/cimind/sentinel.py)<br/>21d Median/MAD concordance, PV-1..PV-6 &amp; COAST-6"]
+    Sentinel["ClinicalSentinelCron (src/cimind/sentinel.py)<br/>21d Median/MAD concordance, PV-1..PV-7 &amp; COAST-6"]
     MMU["EpistemicMemoryMMU + AuditLedger (src/cimind/mmu.py, audit.py)<br/>Zones 1-4 SQLite/SQLCipher + Hindsight banks + SHA-256 chain"]
 
     Appliance --> Reflex
@@ -56,13 +56,14 @@ flowchart TD
 
 | Stage / Pathology | Enforced Runtime Posture | Key Safety & Interaction Rules |
 | :--- | :--- | :--- |
-| `GDS 1–3` (`PeerCoPilot`) | Collaborative memory prosthetic | Compensatory `L1` noun code-switching exempted from drift alarms; afternoon (`12:00–15:00`) seated dual-task `Cognicise` enabled; `Mode A` autonomous micro-gifting (`<= 35 EUR`) within `24h/7d` velocity caps |
-| `GDS 4` (`GuidedConcierge`) | Linear step-by-step scaffolding | Single-step instructions; room-grounded 3-card `PictogramCard` (`>= 7:1` contrast) paraphasic object disambiguation; `LucidityWindow` session deferral |
-| `GDS 5–6` (`IntegrativeValidation`) | Zero-quiz emotional validation | Automatic intra-turn pivot to childhood `mother_tongue_l1` on comprehension/pause breakdown; interrogative (`?`) and bereavement-term scrubbing; `Mode B` remote diaspora cryptographic co-sign required for fulfillment |
-| `GDS 7` (`SensoryPalliative`) | Non-verbal comfort & dysphagia safety | All oral food/drink/tea prompts hard-blocked (`oral_prompt_blocked=True`); concierge purchasing disabled; calming familiar prosody and music cues only |
-| `LewyBody` | Visual-hallucination & neuroleptic guard | `D2`-antagonist antipsychotics flagged at `ClinicalVault` intake (`DLB_D2_ANTAGONIST_CONTRAINDICATED`); companion actuators freeze (`motor_frozen=True`, `pre_speech_gaze_lead_ms=0`) in dark rooms or nocturnal hours |
-| `BehavioralFTD` | Hyperorality & financial guard | Food, confectionery, chemical, and pica-risk SKU categories hard-blocked in `Co-Agency Concierge` (`RULE_BVFTD_HYPERORALITY_SKU_BLOCKED`) |
-| `DualSensoryLoss` | Presbycusis & low-vision adaptation | Slowed speech rate (`115–118 WPM`), `+4.5–5.0 dB` consonant shelf boost, extended `3,500 ms` VAD patience, and `>= 7:1` contrast visual cards |
+| `GDS 1–3` (`PeerCoPilot`) | Collaborative memory prosthetic | Compensatory `L1` noun code-switching exempted from drift alarms; afternoon (`12:00–15:00`) seated dual-task `Cognicise`, seated `0.1 Hz` zero-hold breathing (`<= 20 min`), and `12-min` secular `Kirtan Kriya` enabled when cleared; `Mode A` autonomous micro-gifting (`<= 35 EUR`) within `24h/7d` velocity caps |
+| `GDS 4` (`GuidedConcierge`) | Linear step-by-step scaffolding | Single-step instructions; room-grounded 3-card `PictogramCard` (`>= 7:1` contrast) paraphasic object disambiguation; contemplative routines caution-gated (`<= 5 min` zero-count pacing with `< 2000 ms` distress/standing downshift); `LucidityWindow` session deferral |
+| `GDS 5–6` (`IntegrativeValidation`) | Zero-quiz emotional validation | Automatic intra-turn pivot to childhood `mother_tongue_l1` on comprehension/pause breakdown; interrogative (`?`) and bereavement-term scrubbing; structured breathwork/chanting hard-blocked in favor of familiar music; `Mode B` remote diaspora cryptographic co-sign required for fulfillment |
+| `GDS 7` (`SensoryPalliative`) | Non-verbal comfort & dysphagia safety | All oral food/drink/tea prompts hard-blocked (`oral_prompt_blocked=True`, including during crisis grounding); concierge purchasing and structured contemplative practices disabled; calming familiar prosody and music cues only |
+| `LewyBody` | Visual-hallucination & neuroleptic guard | `D2`-antagonist antipsychotics flagged at `ClinicalVault` intake (`DLB_D2_ANTAGONIST_CONTRAINDICATED`); companion actuators freeze (`motor_frozen=True`, `pre_speech_gaze_lead_ms=0`) in dark rooms (`< 30 lux`) or nocturnal hours; eyes-open relaxation requires `>= 150 lux` daytime light and `Kirtan Kriya` routes to audio-only music |
+| `BehavioralFTD` | Hyperorality & financial guard | Food, confectionery, chemical, and pica-risk SKU categories hard-blocked in `Co-Agency Concierge` (`RULE_BVFTD_HYPERORALITY_SKU_BLOCKED`); `Kirtan Kriya` caution-gated with `12-min` cap |
+| `DualSensoryLoss` | Presbycusis & low-vision adaptation | Slowed speech rate (`115–118 WPM`), `+4.5–5.0 dB` consonant shelf boost, extended `3,500 ms` VAD patience, and `>= 7:1` contrast visual choice and breathing-pacer cards |
+| `Contemplative & Somatic Crisis` | Zero-override hazard block & 4-stage grounding | Forced hyperventilation, breath retention (`kumbhaka`/`Valsalva`/`bandhas`), `kechari mudra`, sun gazing, inversions, and deconstructive/cessation/kundalini protocols hard-blocked across all stages; somatic crisis utterances halt practice for calm eyes-open grounding, emit non-diagnostic differential triage (`TIER_3` with `lecanemab`/`donanemab` IV `tPA` warning or `TIER_1` routine), quarantine in `Zone 4`, and enforce a signature-gated `72h` SQLite cooldown |
 
 ---
 
@@ -203,9 +204,9 @@ Importing or running `cimind` opens zero unsolicited network sockets and require
 | [`src/cimind/reflex.py`](src/cimind/reflex.py) | Pure `< 5 ms` `SafetyReflexEngine` (camera-free fall fusion, `590 nm` pathway, fail-safe geolock, GNSS handover, `HEAR` gate) |
 | [`src/cimind/circadian.py`](src/cimind/circadian.py) | `CIE S 026` melanopic Equivalent Daylight Illuminance (`m-EDI`) solver (`>= 250 m-EDI` daytime, `< 10 m-EDI` evening) |
 | [`src/cimind/geotrigger.py`](src/cimind/geotrigger.py) | WGS-84 Haversine 3-zone LoRaWAN (`ChirpStack` / `WisGate` / `The Things Stack`) geofence engine |
-| [`src/cimind/companion.py`](src/cimind/companion.py) | `CompanionAndConcierge`, `LanguageEnginePort`, `FulfillmentPort`, `Ikigai`/`Cognicise` rituals, and Mode A/B concierge |
+| [`src/cimind/companion.py`](src/cimind/companion.py) | `CompanionAndConcierge`, `LanguageEnginePort`, `FulfillmentPort`, `Ikigai`/`Cognicise` rituals, Contemplative Safety Envelope, Stage-1 crisis grounding, and Mode A/B concierge |
 | [`src/cimind/policy.py`](src/cimind/policy.py) | 3-tier deterministic action gate (`Tier 1` autonomous, `Tier 2` velocity-capped, `Tier 3` clinical escalation) |
-| [`src/cimind/sentinel.py`](src/cimind/sentinel.py) | Pure `ClinicalSentinelCron` (`21d` `Median/MAD`, `PV-1..PV-6`, `COAST-6`, `t-HELP`, `Household Care Graph` routing) |
+| [`src/cimind/sentinel.py`](src/cimind/sentinel.py) | Pure `ClinicalSentinelCron` (`21d` `Median/MAD`, `PV-1..PV-7`, `48h` sleep & stupor/catatonia guards, `COAST-6`, `t-HELP`, `Household Care Graph` routing) |
 | [`src/cimind/appliance.py`](src/cimind/appliance.py) | Top-level `CiMindAppliance` coordinator |
 | [`src/cimind/cli.py`](src/cimind/cli.py) | Offline diagnostic CLI (`doctor`, `circadian`, `reflex`, `sentinel`, `concierge`, `geotrigger`) |
 | [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md) | Primary-source clinical & engineering evidence matrix (`PMID` / `NCT` / `CIE S 026` / `arXiv`), non-MDR scope, and `v0.2.0` kernel-vs-adapter truth table |

@@ -10,18 +10,34 @@ from typing import Literal, Protocol
 
 from cimind.domain import (
     BEREAVEMENT_TERMS,
+    NON_PRESCRIPTIVE_CLINICIAN_BANNER,
     ORAL_INTAKE_TERMS,
+    UNIVERSALLY_HARD_BLOCKED_PRACTICES,
     CareGraphAlertEffect,
     CareRole,
+    ContemplativePracticeKind,
+    ContemplativeVulnerabilityFlag,
+    CrisisRedFlagCategory,
     EmbodiedPromptEffect,
+    EpistemicProvenance,
     EpistemicViolationError,
     GdsStage,
     PathologyFlag,
     PatientCareProfile,
     PictogramCard,
+    PracticeSafetyDecision,
     TherapeuticMode,
     VerifiedEffect,
+    classify_contemplative_crisis_red_flags,
+    classify_contemplative_hazard,
+    classify_epistemic_corpus_violation,
+    classify_requested_practice,
+    classify_unscreened_supplement_or_antimed,
     contains_clinical_term,
+    has_contemplative_crisis_metaphysics,
+    has_somatic_or_contemplative_crisis_cues,
+    is_anti_amyloid_mab_medication,
+    is_serotonergic_medication,
 )
 from cimind.mmu import CommerceSpendRecord, EpistemicContextBundle, EpistemicMemoryMMU
 from cimind.policy import ActionTier
@@ -33,6 +49,7 @@ __all__ = [
     "ConciergeSession",
     "ConciergeState",
     "ConciergeStepResult",
+    "ContemplativeGateDecision",
     "DeterministicLanguageAdapter",
     "FulfillmentOrder",
     "FulfillmentPort",
@@ -53,10 +70,109 @@ RitualTrigger = Literal[
     "COGNICISE",
     "HYDRATION",
     "VESTIBULE_REDIRECT",
+    "PACED_BREATHING_0_1HZ",
+    "KIRTAN_KRIYA",
+    "GROUNDED_RELAXATION",
+    "CONTEMPLATIVE_REQUEST",
 ]
 
 _BEREAVEMENT_TERMS = BEREAVEMENT_TERMS
 _ORAL_INTAKE_TERMS = ORAL_INTAKE_TERMS
+
+_CRISIS_DIAGNOSTIC_LABEL_PATTERN = re.compile(
+    r"\b(?:schizophrenia|bipolar|psychosis|psychotic|mania|manic|delusion\w*"
+    r"|hallucinat\w*|serotonin\s+syndrome|catatonia|catatonic|delirium"
+    r"|stroke|epilepsy|seizure\w*|mental\s+illness|psychiatric\s+disorder)\b",
+    re.IGNORECASE,
+)
+
+_SUPERNATURAL_CRISIS_TERMS_PATTERN = re.compile(
+    r"\b(?:kundalini|dmt|dimethyltryptamine|chakra\w*|third[- ]eye|pineal"
+    r"|shaktipat|ascension|4d|5d|3d|cosmic\s+om|spiritual\s+emergency"
+    r"|multidimensional)\b",
+    re.IGNORECASE,
+)
+
+_EYES_CLOSED_CUE_PATTERN = re.compile(
+    r"\b(?:close\s+your\s+eyes|eyes[- ]closed|shut\s+your\s+eyes|body\s+scan)\b",
+    re.IGNORECASE,
+)
+
+_FORBIDDEN_CURE_OR_HOLD_PATTERN = re.compile(
+    r"\b(?:amyloid|plaque\s+clear\w*|cures?\s+(?:alzheimer|dementia|cancer)"
+    r"|reverses?\s+(?:dementia|alzheimer|brain\s+age)|dna\s+reprogram\w*"
+    r"|hold\s+your\s+breath)\b",
+    re.IGNORECASE,
+)
+
+_ANTIMED_REFERENCE_PATTERN = re.compile(
+    r"\b(?:med\w*|antidepressant\w*|antipsychotic\w*|ssri\w*|hospital(?:ization)?)\b",
+    re.IGNORECASE,
+)
+
+_CONTEMPLATIVE_PRACTICE_TO_RITUAL: dict[ContemplativePracticeKind, str] = {
+    ContemplativePracticeKind.PACED_RESONANCE_0_1HZ: "PACED_BREATHING_0_1HZ",
+    ContemplativePracticeKind.SEATED_KIRTAN_KRIYA: "SEATED_KIRTAN_KRIYA",
+    ContemplativePracticeKind.GROUNDED_EXTERIOR_RELAXATION: "GROUNDED_EXTERIOR_RELAXATION",
+    ContemplativePracticeKind.SEATED_CHAIR_MOBILITY: "SEATED_CHAIR_MOBILITY",
+    ContemplativePracticeKind.FAMILIAR_MUSIC_AND_SWAY: "ERRORLESS_MUSICAL_SWAY",
+}
+
+_STRUCTURED_CONTEMPLATIVE_RITUALS: frozenset[str] = frozenset(
+    {
+        "PACED_BREATHING_0_1HZ",
+        "SEATED_KIRTAN_KRIYA",
+        "GROUNDED_EXTERIOR_RELAXATION",
+        "SEATED_CHAIR_MOBILITY",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ContemplativeGateDecision:
+    """Deterministic stage-, pathology-, and vulnerability-gated contemplative policy verdict."""
+
+    practice: ContemplativePracticeKind
+    decision: PracticeSafetyDecision
+    policy_rule_id: str
+    max_duration_minutes: int
+    max_breath_hold_sec: int
+    target_bpm_range: tuple[float, float] | None
+    require_seated: bool
+    require_eyes_open: bool
+    min_ambient_lux: float
+    fallback_ritual_kind: str
+    reason: str
+
+
+def _canonical_crisis_grounding_text(*, has_dysphagia: bool) -> str:
+    if has_dysphagia:
+        return (
+            "We are pausing the practice now. Keep your eyes open, stay seated comfortably "
+            "with both feet flat on the floor, and notice three ordinary objects in the room "
+            "around you, like the chair, the table, and the wall. You are safe here while "
+            "your care team checks in with you."
+        )
+    return (
+        "We are pausing the practice now. Keep your eyes open, sit comfortably with both "
+        "feet flat on the floor, and look at three ordinary objects in the room around you, "
+        "like the chair, the table, and the window. Breathe naturally at your own pace and "
+        "have a small sip of cool water if comfortable while your care team checks in with you."
+    )
+
+
+def _paced_breathing_visual_cards() -> tuple[PictogramCard, ...]:
+    return (
+        PictogramCard(
+            card_id="pacer-01hz-visual",
+            slot_index=1,
+            icon_id="breath_pacer_01hz_slow",
+            label_l1="Slow Breath (0.1 Hz, 0s Hold)",
+            contrast_ratio=14.0,
+            category="contemplative_pacer",
+        ),
+    )
+
 
 _APPLIANCE_OR_FETCH_CUES: tuple[str, ...] = (
     "turn off",
@@ -106,8 +222,44 @@ class DeterministicLanguageAdapter:
     """Offline deterministic language engine respecting therapeutic modes and circadian rituals."""
 
     def generate_reply(self, request: LanguageDraftRequest) -> str:
+        if request.ritual_kind == "CRISIS_REALITY_GROUNDING":
+            has_dysphagia = (
+                request.profile.gds_stage == GdsStage.GDS_7
+                or ContemplativeVulnerabilityFlag.DYSPHAGIA_OR_ASPIRATION_RISK
+                in request.profile.effective_contemplative_vulnerabilities
+            )
+            return _canonical_crisis_grounding_text(has_dysphagia=has_dysphagia)
         if request.therapeutic_mode == TherapeuticMode.SENSORY_PALLIATIVE:
             return "You are safe and comfortable right here with gentle music."
+        if request.ritual_kind == "PACED_BREATHING_0_1HZ":
+            if PathologyFlag.APHASIC_PPA in request.profile.pathologies:
+                return "Breathe in slowly. Breathe out."
+            if request.profile.gds_stage == GdsStage.GDS_4:
+                return (
+                    "Sit comfortably with your eyes open and follow the gentle light to breathe "
+                    "in softly through your nose and breathe out slowly, with no breath-holding."
+                )
+            return (
+                "Sit comfortably with your eyes open for gentle autonomic relaxation. "
+                "Follow the steady slow pace through your nose, breathing softly in and "
+                "softly out with zero breath-holding."
+            )
+        if request.ritual_kind == "SEATED_KIRTAN_KRIYA":
+            return (
+                "Sit comfortably with your eyes open for a calm twelve-minute seated rhythm. "
+                "Gently tap each finger to your thumb in sequence while softly voicing "
+                "Sa, Ta, Na, Ma at an easy, steady pace with zero breath-holding."
+            )
+        if request.ritual_kind == "GROUNDED_EXTERIOR_RELAXATION":
+            return (
+                "Sit comfortably with your eyes open and rest your gaze gently on three calm, "
+                "familiar objects in the room around you while listening to steady ambient sounds."
+            )
+        if request.ritual_kind == "SEATED_CHAIR_MOBILITY":
+            return (
+                "Stay seated safely in your chair with both feet grounded on the floor and "
+                "roll your shoulders gently at a comfortable pace."
+            )
         if request.ritual_kind == "IKIGAI_ROLE_REVERSAL":
             topic = (
                 request.profile.ikigai_domains[0]
@@ -171,6 +323,9 @@ class TurnInput:
     code_switched_l1_nouns: int = 0
     ritual_trigger: RitualTrigger = "CONVERSATION"
     is_proactive: bool = False
+    requested_practice: ContemplativePracticeKind | None = None
+    caregiver_contemplative_signoff: bool = False
+    reported_sleep_loss_hours: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -188,6 +343,12 @@ class TurnResult:
     ikigai_applied: bool = False
     cognicise_downshifted: bool = False
     downshift_latency_ms: int | None = None
+    contemplative_decision: ContemplativeGateDecision | None = None
+    contemplative_downshifted: bool = False
+    crisis_grounding_triggered: bool = False
+    crisis_red_flags: tuple[CrisisRedFlagCategory, ...] = ()
+    quarantine_crisis_tags: tuple[str, ...] = ()
+    recommended_cooldown_hours: int = 0
 
 
 def _same_language(tag_a: str, tag_b: str) -> bool:
@@ -554,10 +715,437 @@ class CompanionAndConcierge:
         projected = [*recent, False]
         return (sum(1 for x in projected if x) / len(projected)) < 0.40
 
+    def evaluate_contemplative_practice(
+        self,
+        profile: PatientCareProfile,
+        practice: ContemplativePracticeKind,
+        *,
+        ambient_lux: float = 300.0,
+        local_hour: int = 10,
+        active_cooldown: bool = False,
+    ) -> ContemplativeGateDecision:
+        """Deterministically evaluate a contemplative practice against GDS, pathology & risk."""
+        fallback = (
+            "SENSORY_PALLIATIVE_COMFORT"
+            if profile.gds_stage == GdsStage.GDS_7
+            else "ERRORLESS_MUSICAL_SWAY"
+        )
+        vulns = profile.effective_contemplative_vulnerabilities
+        is_dlb = PathologyFlag.LEWY_BODY in profile.pathologies
+        is_nocturnal = local_hour >= 21 or local_hour < 6
+        is_dlb_dim_or_night = is_dlb and (ambient_lux < 150.0 or is_nocturnal)
+        min_lux_dlb = 150.0 if is_dlb else 0.0
+
+        def _gate(
+            decision: PracticeSafetyDecision,
+            rule_id: str,
+            *,
+            max_minutes: int,
+            reason: str,
+            bpm: tuple[float, float] | None = None,
+            eyes_open: bool = True,
+            min_lux: float = 0.0,
+        ) -> ContemplativeGateDecision:
+            return ContemplativeGateDecision(
+                practice=practice,
+                decision=decision,
+                policy_rule_id=rule_id,
+                max_duration_minutes=max_minutes,
+                max_breath_hold_sec=0,
+                target_bpm_range=bpm,
+                require_seated=True,
+                require_eyes_open=eyes_open,
+                min_ambient_lux=min_lux,
+                fallback_ritual_kind=fallback,
+                reason=reason,
+            )
+
+        # 1. Universal Hard-Block Check (Zero Override)
+        if practice in UNIVERSALLY_HARD_BLOCKED_PRACTICES:
+            return _gate(
+                PracticeSafetyDecision.HARD_BLOCKED,
+                "RULE_CONTEMPLATIVE_UNIVERSAL_HARD_BLOCK",
+                max_minutes=0,
+                min_lux=min_lux_dlb,
+                reason=f"{practice.value} is universally hard-blocked across all stages.",
+            )
+
+        # 2. Active Post-Crisis 72h Cooldown Lockout
+        if active_cooldown and practice != ContemplativePracticeKind.FAMILIAR_MUSIC_AND_SWAY:
+            return _gate(
+                PracticeSafetyDecision.HARD_BLOCKED,
+                "RULE_CONTEMPLATIVE_POST_CRISIS_COOLDOWN",
+                max_minutes=0,
+                reason=(
+                    "Active 72-hour post-crisis cooldown blocks structured contemplative practice."
+                ),
+            )
+
+        # 3. Familiar music & gentle sway is allowed across all GDS 1-7 stages
+        if practice == ContemplativePracticeKind.FAMILIAR_MUSIC_AND_SWAY:
+            return _gate(
+                PracticeSafetyDecision.ALLOWED,
+                "RULE_CONTEMPLATIVE_FAMILIAR_MUSIC_ALLOWED",
+                max_minutes=20,
+                eyes_open=is_dlb,
+                reason="Familiar personalized music and errorless sway allowed across GDS 1-7.",
+            )
+
+        # 4. GDS 5-7 hard-blocks all structured breathing, chanting, relaxation & chair mobility
+        if profile.gds_stage >= GdsStage.GDS_5:
+            return _gate(
+                PracticeSafetyDecision.HARD_BLOCKED,
+                "RULE_CONTEMPLATIVE_GDS5_PLUS_BLOCKED",
+                max_minutes=0,
+                reason="Structured contemplative routines are blocked in GDS 5-7.",
+            )
+
+        if practice == ContemplativePracticeKind.PACED_RESONANCE_0_1HZ:
+            if is_dlb_dim_or_night:
+                return _gate(
+                    PracticeSafetyDecision.HARD_BLOCKED,
+                    "RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED",
+                    max_minutes=0,
+                    min_lux=150.0,
+                    reason=(
+                        "LewyBody paced breathing requires eyes open and >= 150 lux daytime light."
+                    ),
+                )
+            if profile.gds_stage == GdsStage.GDS_4:
+                return _gate(
+                    PracticeSafetyDecision.CAUTION_GATED,
+                    "RULE_CONTEMPLATIVE_GDS4_CAUTION_GATED",
+                    max_minutes=5,
+                    bpm=(4.5, 6.0),
+                    min_lux=min_lux_dlb,
+                    reason=(
+                        "GDS 4 0.1 Hz pacing requires caregiver sign-off (<= 5 min, zero counting)."
+                    ),
+                )
+            if (
+                ContemplativeVulnerabilityFlag.ORTHOSTATIC_OR_CARDIOPULMONARY_INSTABILITY in vulns
+                or ContemplativeVulnerabilityFlag.SLEEP_DEPRIVATION_48H in vulns
+            ):
+                return _gate(
+                    PracticeSafetyDecision.CAUTION_GATED,
+                    "RULE_CONTEMPLATIVE_0_1HZ_VULNERABILITY_CAUTION",
+                    max_minutes=10,
+                    bpm=(4.5, 6.0),
+                    min_lux=min_lux_dlb,
+                    reason=(
+                        "Cardiopulmonary/orthostatic instability or 48h sleep loss gates 0.1 Hz "
+                        "pacing to caregiver sign-off (<= 10 min, seated, abort on dizziness)."
+                    ),
+                )
+            return _gate(
+                PracticeSafetyDecision.ALLOWED,
+                "RULE_CONTEMPLATIVE_0_1HZ_ALLOWED",
+                max_minutes=20,
+                bpm=(4.5, 6.0),
+                min_lux=min_lux_dlb,
+                reason="Cleared GDS 1-3 seated 0.1 Hz pacing (4.5-6.0 bpm, 0 s breath-hold).",
+            )
+
+        if practice == ContemplativePracticeKind.SEATED_KIRTAN_KRIYA:
+            if (
+                PathologyFlag.APHASIC_PPA in profile.pathologies
+                or is_dlb
+                or ContemplativeVulnerabilityFlag.DYSPHAGIA_OR_ASPIRATION_RISK in vulns
+            ):
+                return _gate(
+                    PracticeSafetyDecision.HARD_BLOCKED,
+                    "RULE_CONTEMPLATIVE_KIRTAN_KRIYA_CONTRAINDICATED",
+                    max_minutes=0,
+                    min_lux=min_lux_dlb,
+                    reason=(
+                        "Kirtan Kriya is hard-blocked for AphasicPPA, LewyBody, or dysphagia risk."
+                    ),
+                )
+            kirtan_caution_vulns = {
+                ContemplativeVulnerabilityFlag.SEIZURE_OR_TLE_RISK,
+                ContemplativeVulnerabilityFlag.ORTHOSTATIC_OR_CARDIOPULMONARY_INSTABILITY,
+                ContemplativeVulnerabilityFlag.PSYCHOSIS_OR_BIPOLAR_SPECTRUM,
+                ContemplativeVulnerabilityFlag.SLEEP_DEPRIVATION_48H,
+            }
+            if (
+                profile.gds_stage == GdsStage.GDS_4
+                or PathologyFlag.BEHAVIORAL_FTD in profile.pathologies
+                or bool(vulns & kirtan_caution_vulns)
+            ):
+                return _gate(
+                    PracticeSafetyDecision.CAUTION_GATED,
+                    "RULE_CONTEMPLATIVE_KIRTAN_KRIYA_CAUTION_GATED",
+                    max_minutes=12,
+                    reason=(
+                        "Seated secular Kirtan Kriya requires caregiver/clinician sign-off "
+                        "with strict 12-min auto-end and errorless music fallback."
+                    ),
+                )
+            return _gate(
+                PracticeSafetyDecision.ALLOWED,
+                "RULE_CONTEMPLATIVE_KIRTAN_KRIYA_ALLOWED",
+                max_minutes=12,
+                reason="Cleared GDS 1-3 seated 12-min secular Kirtan Kriya (0 s breath-hold).",
+            )
+
+        if practice == ContemplativePracticeKind.GROUNDED_EXTERIOR_RELAXATION:
+            if is_dlb_dim_or_night:
+                return _gate(
+                    PracticeSafetyDecision.HARD_BLOCKED,
+                    "RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED",
+                    max_minutes=0,
+                    min_lux=150.0,
+                    reason="LewyBody relaxation requires eyes open and >= 150 lux daytime light.",
+                )
+            if profile.gds_stage == GdsStage.GDS_4:
+                return _gate(
+                    PracticeSafetyDecision.CAUTION_GATED,
+                    "RULE_CONTEMPLATIVE_GDS4_CAUTION_GATED",
+                    max_minutes=5,
+                    min_lux=min_lux_dlb,
+                    reason=(
+                        "GDS 4 eyes-open external relaxation requires caregiver "
+                        "sign-off (<= 5 min)."
+                    ),
+                )
+            if (
+                ContemplativeVulnerabilityFlag.TRAUMA_OR_PTSD_HISTORY in vulns
+                or ContemplativeVulnerabilityFlag.PSYCHOSIS_OR_BIPOLAR_SPECTRUM in vulns
+                or ContemplativeVulnerabilityFlag.SLEEP_DEPRIVATION_48H in vulns
+            ):
+                return _gate(
+                    PracticeSafetyDecision.CAUTION_GATED,
+                    "RULE_CONTEMPLATIVE_TRAUMA_OR_PSYCHOSIS_EYES_OPEN_ONLY",
+                    max_minutes=10,
+                    min_lux=min_lux_dlb,
+                    reason=(
+                        "Trauma/PTSD or psychosis vulnerability restricts relaxation to "
+                        "caregiver-approved eyes-open external sensory anchors."
+                    ),
+                )
+            return _gate(
+                PracticeSafetyDecision.ALLOWED,
+                "RULE_CONTEMPLATIVE_GROUNDED_RELAXATION_ALLOWED",
+                max_minutes=10,
+                min_lux=min_lux_dlb,
+                reason="Cleared GDS 1-3 seated eyes-open external sensory relaxation (<= 10 min).",
+            )
+
+        # Remaining practice: SEATED_CHAIR_MOBILITY
+        if (
+            profile.gds_stage >= GdsStage.GDS_4
+            or PathologyFlag.VASCULAR in profile.pathologies
+            or is_dlb
+            or ContemplativeVulnerabilityFlag.ORTHOSTATIC_OR_CARDIOPULMONARY_INSTABILITY in vulns
+        ):
+            return _gate(
+                PracticeSafetyDecision.HARD_BLOCKED,
+                "RULE_CONTEMPLATIVE_CHAIR_MOBILITY_BLOCKED",
+                max_minutes=0,
+                min_lux=min_lux_dlb,
+                reason=(
+                    "Unsupervised chair mobility is blocked in GDS 4+ or Vascular/LewyBody/"
+                    "orthostatic risk profiles."
+                ),
+            )
+        return _gate(
+            PracticeSafetyDecision.CAUTION_GATED,
+            "RULE_CONTEMPLATIVE_CHAIR_MOBILITY_CAUTION_GATED",
+            max_minutes=10,
+            reason="Seated chair mobility requires caregiver sign-off with zero stand-ups.",
+        )
+
+    @staticmethod
+    def _resolve_requested_practice(turn: TurnInput) -> ContemplativePracticeKind | None:
+        hazard = classify_contemplative_hazard(turn.utterance)
+        if hazard is not None:
+            return hazard
+        if turn.requested_practice is not None:
+            return turn.requested_practice
+        if turn.ritual_trigger == "PACED_BREATHING_0_1HZ":
+            return ContemplativePracticeKind.PACED_RESONANCE_0_1HZ
+        if turn.ritual_trigger == "KIRTAN_KRIYA":
+            return ContemplativePracticeKind.SEATED_KIRTAN_KRIYA
+        if turn.ritual_trigger == "GROUNDED_RELAXATION":
+            return ContemplativePracticeKind.GROUNDED_EXTERIOR_RELAXATION
+        if turn.ritual_trigger == "CONTEMPLATIVE_REQUEST":
+            return (
+                classify_requested_practice(turn.utterance)
+                or ContemplativePracticeKind.GROUNDED_EXTERIOR_RELAXATION
+            )
+        return None
+
+    @staticmethod
+    def _build_crisis_alert(
+        *,
+        crisis_red_flags: tuple[CrisisRedFlagCategory, ...],
+        context: EpistemicContextBundle,
+    ) -> CareGraphAlertEffect:
+        active_serotonergic = sorted(
+            {
+                str(m.get("drug_name", "")).strip()
+                for m in context.active_medications
+                if is_serotonergic_medication(m) and str(m.get("drug_name", "")).strip()
+            }
+        )
+        has_anti_amyloid = any(
+            is_anti_amyloid_mab_medication(m) for m in context.active_medications
+        )
+        if crisis_red_flags:
+            diff_list = [flag.value for flag in crisis_red_flags]
+            tpa_contraindicated = has_anti_amyloid
+            tpa_note = (
+                " EMERGENCY WARNING: Active anti-amyloid mAb therapy; IV thrombolytics "
+                "(tPA/tenecteplase) carry fatal cerebral hemorrhage risk until ARIA is excluded."
+                if tpa_contraindicated
+                else ""
+            )
+            return CareGraphAlertEffect(
+                tier=ActionTier.TIER_3_CLINICAL_EMERGENCY,
+                target_roles=(
+                    CareRole.CO_RESIDENT_HANDS_ON,
+                    CareRole.VISITING_CLINICIAN,
+                    CareRole.REMOTE_DIASPORA_COSIGNER,
+                ),
+                alert_code="CONTEMPLATIVE_CRISIS_MEDICAL_TRIAGE",
+                evidence_ids=("companion-crisis-grounding",),
+                summary=(
+                    "Urgent human medical/psychiatric evaluation recommended to rule out: "
+                    f"{', '.join(diff_list)}. Active contemplative protocols halted for 72h."
+                    f"{tpa_note}"
+                ),
+                payload={
+                    "differential_categories": diff_list,
+                    "active_serotonergic_meds": active_serotonergic,
+                    "tpa_thrombolytic_contraindicated": tpa_contraindicated,
+                    "cooldown_hours": 72,
+                    "non_diagnostic_observational_scope": True,
+                },
+                safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+            )
+        return CareGraphAlertEffect(
+            tier=ActionTier.TIER_1_ROUTINE,
+            target_roles=(
+                CareRole.CO_RESIDENT_HANDS_ON,
+                CareRole.VISITING_CLINICIAN,
+            ),
+            alert_code="CONTEMPLATIVE_HYPERAROUSAL_COOLDOWN_ALERT",
+            evidence_ids=("companion-crisis-grounding",),
+            summary=(
+                "Transient somatic distress reported during or after practice; active "
+                "contemplative protocols paused for a 72-hour cooldown pending caregiver "
+                "and routine physician check-in."
+            ),
+            payload={
+                "differential_categories": [],
+                "active_serotonergic_meds": active_serotonergic,
+                "tpa_thrombolytic_contraindicated": False,
+                "cooldown_hours": 72,
+                "non_diagnostic_observational_scope": True,
+            },
+            safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+        )
+
+    @staticmethod
+    def _scrub_hostile_output(
+        *,
+        spoken: str,
+        raw_reply: str,
+        req: LanguageDraftRequest,
+        profile: PatientCareProfile,
+        ritual_kind: str,
+        crisis_triggered: bool,
+        contemplative_downshifted: bool,
+        contemplative_decision: ContemplativeGateDecision | None,
+        has_dysphagia: bool,
+    ) -> tuple[str, bool]:
+        """Deterministically scrub hazards, myths, collusion, labels, and oral cues."""
+        oral_blocked_extra = False
+        if crisis_triggered:
+            if has_dysphagia and (
+                _contains_any_term(raw_reply, _ORAL_INTAKE_TERMS)
+                or _contains_any_term(spoken, _ORAL_INTAKE_TERMS)
+            ):
+                oral_blocked_extra = True
+            lowered = spoken.lower()
+            crisis_unsafe = (
+                classify_epistemic_corpus_violation(spoken) is not None
+                or has_contemplative_crisis_metaphysics(spoken)
+                or _SUPERNATURAL_CRISIS_TERMS_PATTERN.search(spoken) is not None
+                or _CRISIS_DIAGNOSTIC_LABEL_PATTERN.search(spoken) is not None
+                or _EYES_CLOSED_CUE_PATTERN.search(spoken) is not None
+                or "?" in spoken
+                or (has_dysphagia and _contains_any_term(spoken, _ORAL_INTAKE_TERMS))
+                or "eyes open" not in lowered
+                or "feet" not in lowered
+            )
+            if crisis_unsafe:
+                return _canonical_crisis_grounding_text(has_dysphagia=has_dysphagia), (
+                    oral_blocked_extra
+                )
+            return spoken, oral_blocked_extra
+
+        antimed_hit = classify_unscreened_supplement_or_antimed(spoken) is not None and (
+            _ANTIMED_REFERENCE_PATTERN.search(spoken) is not None
+        )
+        unsafe_corpus = classify_epistemic_corpus_violation(
+            spoken
+        ) is not None or has_contemplative_crisis_metaphysics(spoken)
+        require_eyes_open = (
+            contemplative_decision is not None and contemplative_decision.require_eyes_open
+        ) or ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS
+        unsafe_practice_draft = (
+            ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS
+            and (
+                _FORBIDDEN_CURE_OR_HOLD_PATTERN.search(spoken) is not None
+                or _SUPERNATURAL_CRISIS_TERMS_PATTERN.search(spoken) is not None
+            )
+        ) or (require_eyes_open and _EYES_CLOSED_CUE_PATTERN.search(spoken) is not None)
+
+        if unsafe_corpus or unsafe_practice_draft:
+            if profile.gds_stage == GdsStage.GDS_7 or ritual_kind == "SENSORY_PALLIATIVE_COMFORT":
+                safe_text = "You are safe and comfortable right here with gentle calming music."
+            elif contemplative_downshifted or ritual_kind == "ERRORLESS_MUSICAL_SWAY":
+                safe_text = (
+                    "Let us simply relax in the chair and sway gently together "
+                    "to this warm familiar melody."
+                )
+            elif ritual_kind in _STRUCTURED_CONTEMPLATIVE_RITUALS:
+                safe_text = DeterministicLanguageAdapter().generate_reply(req)
+            else:
+                safe_text = "Let us stay grounded right here together with calm, ordinary comfort."
+            if antimed_hit and profile.gds_stage < GdsStage.GDS_7:
+                safe_text = f"{safe_text} {NON_PRESCRIPTIVE_CLINICIAN_BANNER}"
+            spoken = safe_text
+
+        if has_dysphagia and _contains_any_term(spoken, _ORAL_INTAKE_TERMS):
+            oral_blocked_extra = True
+            if profile.gds_stage == GdsStage.GDS_7 or ritual_kind == "SENSORY_PALLIATIVE_COMFORT":
+                spoken = "You are safe and comfortable right here with gentle calming music."
+            else:
+                spoken = "Let us stay comfortable right here together and relax with gentle music."
+
+        if (
+            ritual_kind == "PACED_BREATHING_0_1HZ"
+            and PathologyFlag.APHASIC_PPA in profile.pathologies
+            and len(spoken.split()) > 5
+        ):
+            spoken = "Breathe in slowly. Breathe out."
+
+        if profile.gds_stage >= GdsStage.GDS_5:
+            spoken = _scrub_interrogatives(spoken)
+
+        return spoken, oral_blocked_extra
+
     def handle_turn(self, turn: TurnInput, context: EpistemicContextBundle) -> TurnResult:
         profile = context.profile
         mode = profile.therapeutic_mode
         exclusions = context.bereavement_exclusions | profile.deceased_relatives
+        effective_vulns = profile.effective_contemplative_vulnerabilities
+        has_dysphagia = (
+            profile.gds_stage == GdsStage.GDS_7
+            or ContemplativeVulnerabilityFlag.DYSPHAGIA_OR_ASPIRATION_RISK in effective_vulns
+        )
         target_lang, l1_pivoted = _resolve_turn_language(turn, profile)
 
         code_switch_exempt = False
@@ -576,15 +1164,88 @@ class CompanionAndConcierge:
         ikigai_applied = False
         cognicise_downshifted = False
         downshift_latency_ms: int | None = None
+        contemplative_decision: ContemplativeGateDecision | None = None
+        contemplative_downshifted = False
+        crisis_red_flags: tuple[CrisisRedFlagCategory, ...] = ()
+        quarantine_crisis_tags: tuple[str, ...] = ()
+        recommended_cooldown_hours = 0
+        extra_effects: list[VerifiedEffect] = []
 
-        proactive_turn = turn.is_proactive or turn.ritual_trigger in {
-            "PROACTIVE_CHECKIN",
-            "IKIGAI",
-            "COGNICISE",
-            "HYDRATION",
-        }
+        # Stage-1 Somatic Hyperarousal & Contemplative Crisis check takes highest precedence
+        utterance_red_flags = classify_contemplative_crisis_red_flags(
+            turn.utterance,
+            active_medications=context.active_medications,
+            contemplative_vulnerabilities=frozenset(),
+            reported_sleep_loss_hours=turn.reported_sleep_loss_hours,
+        )
+        crisis_triggered = has_somatic_or_contemplative_crisis_cues(
+            turn.utterance,
+            reported_sleep_loss_hours=turn.reported_sleep_loss_hours,
+        ) or bool(utterance_red_flags)
 
-        if profile.gds_stage == GdsStage.GDS_7:
+        proactive_turn = (not crisis_triggered) and (
+            turn.is_proactive
+            or turn.ritual_trigger
+            in {
+                "PROACTIVE_CHECKIN",
+                "IKIGAI",
+                "COGNICISE",
+                "HYDRATION",
+            }
+        )
+
+        requested_practice = None if crisis_triggered else self._resolve_requested_practice(turn)
+
+        if crisis_triggered:
+            ritual_kind = "CRISIS_REALITY_GROUNDING"
+            recommended_cooldown_hours = 72
+            quarantine_crisis_tags = (
+                EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
+                EpistemicProvenance.TAG_TRUTH_FALSE.value,
+                EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value,
+            )
+            crisis_red_flags = classify_contemplative_crisis_red_flags(
+                turn.utterance,
+                active_medications=context.active_medications,
+                contemplative_vulnerabilities=effective_vulns,
+                reported_sleep_loss_hours=turn.reported_sleep_loss_hours,
+            )
+            extra_effects.append(
+                self._build_crisis_alert(crisis_red_flags=crisis_red_flags, context=context)
+            )
+        elif requested_practice is not None:
+            active_cooldown = context.contemplative_cooldown_until_utc is not None
+            contemplative_decision = self.evaluate_contemplative_practice(
+                profile,
+                requested_practice,
+                ambient_lux=turn.ambient_lux,
+                local_hour=turn.local_hour,
+                active_cooldown=active_cooldown,
+            )
+            if requested_practice == ContemplativePracticeKind.FAMILIAR_MUSIC_AND_SWAY:
+                ritual_kind = contemplative_decision.fallback_ritual_kind
+            else:
+                needs_downshift = (
+                    contemplative_decision.decision == PracticeSafetyDecision.HARD_BLOCKED
+                    or (
+                        contemplative_decision.decision == PracticeSafetyDecision.CAUTION_GATED
+                        and not turn.caregiver_contemplative_signoff
+                    )
+                    or (contemplative_decision.require_seated and not turn.patient_seated)
+                    or turn.facial_distress_z > 1.5
+                )
+                if needs_downshift:
+                    ritual_kind = contemplative_decision.fallback_ritual_kind
+                    contemplative_downshifted = True
+                    downshift_latency_ms = 350
+                else:
+                    ritual_kind = _CONTEMPLATIVE_PRACTICE_TO_RITUAL[requested_practice]
+                    if ritual_kind == "PACED_BREATHING_0_1HZ" and (
+                        PathologyFlag.APHASIC_PPA in profile.pathologies
+                        or PathologyFlag.DUAL_SENSORY_LOSS in profile.pathologies
+                    ):
+                        cards = _paced_breathing_visual_cards()
+        elif profile.gds_stage == GdsStage.GDS_7:
             if turn.ritual_trigger == "HYDRATION":
                 oral_blocked = True
             ritual_kind = "SENSORY_PALLIATIVE_COMFORT"
@@ -605,10 +1266,18 @@ class CompanionAndConcierge:
                 cognicise_downshifted = True
                 downshift_latency_ms = 350
         elif turn.ritual_trigger == "HYDRATION":
-            ritual_kind = "SOCIAL_CO_DRINKING"
-            cards = _social_co_drinking_cards()
+            if has_dysphagia:
+                oral_blocked = True
+                ritual_kind = "ERRORLESS_MUSICAL_SWAY"
+            else:
+                ritual_kind = "SOCIAL_CO_DRINKING"
+                cards = _social_co_drinking_cards()
         elif turn.ritual_trigger == "VESTIBULE_REDIRECT":
-            ritual_kind = "VESTIBULE_TEA_REDIRECT"
+            if has_dysphagia:
+                oral_blocked = True
+                ritual_kind = "ERRORLESS_MUSICAL_SWAY"
+            else:
+                ritual_kind = "VESTIBULE_TEA_REDIRECT"
         elif turn.ritual_trigger == "IKIGAI":
             ritual_kind = "IKIGAI_ROLE_REVERSAL"
             ikigai_applied = True
@@ -640,7 +1309,9 @@ class CompanionAndConcierge:
         iva_steps: tuple[str, str, str] | None = None
         deceased_ref = _referenced_deceased(turn.utterance, exclusions)
 
-        if paraphasia_disambiguated:
+        if crisis_triggered:
+            spoken = raw_reply.strip()
+        elif paraphasia_disambiguated:
             labels = ", ".join(c.label_l1.lower() for c in cards)
             spoken = (
                 f"Let us check together here in the {turn.room.replace('_', ' ')}. "
@@ -687,13 +1358,35 @@ class CompanionAndConcierge:
         else:
             spoken = raw_reply.strip()
 
+        spoken, oral_scrubbed = self._scrub_hostile_output(
+            spoken=spoken,
+            raw_reply=raw_reply,
+            req=req,
+            profile=profile,
+            ritual_kind=ritual_kind,
+            crisis_triggered=crisis_triggered,
+            contemplative_downshifted=contemplative_downshifted,
+            contemplative_decision=contemplative_decision,
+            has_dysphagia=has_dysphagia,
+        )
+        oral_blocked = oral_blocked or oral_scrubbed
+
         is_dark_or_night = turn.ambient_lux < 30.0 or turn.local_hour >= 21 or turn.local_hour < 6
-        dlb_dark_freeze = PathologyFlag.LEWY_BODY in profile.pathologies and is_dark_or_night
+        dlb_low_lux_contemplative_block = (
+            contemplative_decision is not None
+            and contemplative_decision.policy_rule_id == "RULE_CONTEMPLATIVE_DLB_LOW_LUX_BLOCKED"
+        )
+        dlb_dark_freeze = (
+            PathologyFlag.LEWY_BODY in profile.pathologies and is_dark_or_night
+        ) or dlb_low_lux_contemplative_block
         has_dsl = PathologyFlag.DUAL_SENSORY_LOSS in profile.pathologies
 
         motor_frozen = dlb_dark_freeze
         gaze_lead_ms = 0 if dlb_dark_freeze else 300
-        speech_rate = 112 if profile.gds_stage >= GdsStage.GDS_5 else (118 if has_dsl else 120)
+        if crisis_triggered:
+            speech_rate = 112
+        else:
+            speech_rate = 112 if profile.gds_stage >= GdsStage.GDS_5 else (118 if has_dsl else 120)
         consonant_shelf = 4.5 if has_dsl else 4.0
         vad_patience = 3500 if has_dsl else 3000
 
@@ -711,7 +1404,7 @@ class CompanionAndConcierge:
         )
         return TurnResult(
             prompt_effect=effect,
-            effects=(effect,),
+            effects=(effect, *extra_effects),
             iva_steps=iva_steps,
             oral_prompt_blocked=oral_blocked,
             l1_regression_pivoted=l1_pivoted,
@@ -721,6 +1414,12 @@ class CompanionAndConcierge:
             ikigai_applied=ikigai_applied,
             cognicise_downshifted=cognicise_downshifted,
             downshift_latency_ms=downshift_latency_ms,
+            contemplative_decision=contemplative_decision,
+            contemplative_downshifted=contemplative_downshifted,
+            crisis_grounding_triggered=crisis_triggered,
+            crisis_red_flags=crisis_red_flags,
+            quarantine_crisis_tags=quarantine_crisis_tags,
+            recommended_cooldown_hours=recommended_cooldown_hours,
         )
 
     def _is_sku_blocked_for_profile(

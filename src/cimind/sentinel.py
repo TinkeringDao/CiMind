@@ -11,21 +11,22 @@ from typing import Literal
 
 from cimind.domain import (
     GERIATRIC_DRUG_CATALOG,
+    NON_PRESCRIPTIVE_CLINICIAN_BANNER,
     CareGraphAlertEffect,
     CareGraphMember,
     CareRole,
+    ContemplativeVulnerabilityFlag,
     GdsStage,
     GeriatricDrugSpec,
     PatientCareProfile,
+    is_serotonergic_medication,
+    normalize_drug_key,
 )
 from cimind.policy import ActionTier
 
 ROUTINE_DIGEST_DAILY_CAP = 2
 BASE_WAKEUP_SECONDS = 21_600
 STEPDOWN_WAKEUP_SECONDS = 43_200
-NON_PRESCRIPTIVE_CLINICIAN_BANNER = (
-    "Do NOT stop or change prescribed medications without speaking to the prescribing clinician."
-)
 T_HELP_DELIRIUM_PROTOCOLS: tuple[str, str, str] = (
     "FAMILIAR_VOICE_ORIENTATION_AND_SENSORY_AIDS",
     "EARLY_MOBILIZATION_AND_CO_HYDRATION",
@@ -105,7 +106,7 @@ class MedicationWatchSpec:
     old_patch_removed_verified: bool = True
 
     def resolved_spec(self) -> GeriatricDrugSpec:
-        key = self.drug_name.strip().lower()
+        key = normalize_drug_key(self.drug_name)
         base = GERIATRIC_DRUG_CATALOG.get(
             key,
             GeriatricDrugSpec(
@@ -115,13 +116,19 @@ class MedicationWatchSpec:
                 watch_days=28,
             ),
         )
+        resolved_class = (self.drug_class or base.drug_class).upper()
+        is_sero = base.is_serotonergic or is_serotonergic_medication(
+            {"drug_name": self.drug_name, "drug_class": resolved_class}
+        )
         return GeriatricDrugSpec(
             drug_name=base.drug_name,
-            drug_class=(self.drug_class or base.drug_class).upper(),
+            drug_class=resolved_class,
             acb_score=self.acb_score if self.acb_score is not None else base.acb_score,
             watch_days=base.watch_days,
             beers_avoid=base.beers_avoid,
             is_d2_antagonist=base.is_d2_antagonist,
+            is_serotonergic=is_sero,
+            is_cyp3a4_inducer=base.is_cyp3a4_inducer,
         )
 
 
@@ -261,6 +268,10 @@ class DailyRollup:
     post_infusion_headache_or_visual: bool = False
     asymmetric_gait_slowdown: bool = False
     urine_ph: float | None = None
+    nocturnal_sleep_hours: float = 7.0
+    somatic_hyperarousal_events_count: int = 0
+    reported_crisis_red_flags: tuple[str, ...] = ()
+    sustained_immobility_unresponsive_minutes: float = 0.0
     evidence_ids: tuple[str, ...] = ()
 
 
@@ -317,6 +328,7 @@ class SentinelReport:
     recommended_proactive_language: str = "en-US"
     objective_informant_discordance: bool = False
     care_graph_packets: tuple[CareGraphPacket, ...] = ()
+    active_contemplative_vulnerabilities: frozenset[ContemplativeVulnerabilityFlag] = frozenset()
     next_state: SentinelCronState = field(default_factory=SentinelCronState)
     next_wakeup_seconds: int = BASE_WAKEUP_SECONDS
 
@@ -367,6 +379,8 @@ def _evaluate_iatrogenic(
     medications: Sequence[MedicationWatchSpec],
     ev_ids: tuple[str, ...],
     concordant_uti_active: bool = False,
+    z_temp: float = 0.0,
+    z_hr: float = 0.0,
 ) -> tuple[list[IatrogenicFinding], list[CareGraphAlertEffect], list[CareGraphAlertEffect]]:
     findings: list[IatrogenicFinding] = []
     emergencies: list[CareGraphAlertEffect] = []
@@ -767,6 +781,67 @@ def _evaluate_iatrogenic(
                 )
             )
 
+    # PV-7: Serotonergic toxicity differential (Hunter Criteria concordance)
+    serotonergic_entries = [
+        (m, spec, ds)
+        for m, spec, ds in active_specs
+        if spec.is_serotonergic or spec.drug_name == "st_johns_wort"
+    ]
+    if serotonergic_entries:
+        sero_flag_tokens = {f.strip().lower() for f in current.reported_crisis_red_flags}
+        neuromuscular_hit = current.somatic_hyperarousal_events_count > 0 or bool(
+            sero_flag_tokens & {"clonus", "rigidity", "jerks", "diaphoresis"}
+        )
+        thermal_autonomic_hit = (
+            z_temp >= 2.0
+            or current.skin_temp_delta_c >= 0.8
+            or current.nocturnal_hr_bpm > 100.0
+            or z_hr >= 2.0
+        )
+        if neuromuscular_hit and thermal_autonomic_hit:
+            latest_m, _latest_spec, latest_ds = min(serotonergic_entries, key=lambda x: x[2])
+            pre_win = _frozen_pre_t0_window(rollups, latest_m.t0_day_iso)
+            meds_map = _frozen_medians(pre_win)
+            unique_drugs = list(
+                dict.fromkeys(spec.drug_name for _, spec, _ in serotonergic_entries)
+            )
+            drug_label = "+".join(unique_drugs)
+            f_pv7 = IatrogenicFinding(
+                rule_id="PV-7",
+                alert_code="PV7_SEROTONIN_TOXICITY_DIFFERENTIAL",
+                drug_name=drug_label,
+                t0_day_iso=latest_m.t0_day_iso,
+                days_since_t0=latest_ds,
+                tier=ActionTier.TIER_3_CLINICAL_EMERGENCY,
+                summary=(
+                    f"Active serotonergic therapy ({drug_label}) with somatic hyperarousal or "
+                    f"neuromuscular red flags concordant with thermal/autonomic surge "
+                    f"(skin_temp_delta={current.skin_temp_delta_c:+.2f} C, "
+                    f"HR={current.nocturnal_hr_bpm:.1f} bpm); urgent human clinical evaluation "
+                    f"recommended to rule out serotonin toxicity."
+                ),
+                frozen_pre_t0_medians=meds_map,
+            )
+            findings.append(f_pv7)
+            emergencies.append(
+                CareGraphAlertEffect(
+                    tier=ActionTier.TIER_3_CLINICAL_EMERGENCY,
+                    target_roles=(
+                        CareRole.CO_RESIDENT_HANDS_ON,
+                        CareRole.VISITING_CLINICIAN,
+                        CareRole.REMOTE_DIASPORA_COSIGNER,
+                    ),
+                    alert_code=f_pv7.alert_code,
+                    evidence_ids=ev_ids,
+                    summary=f_pv7.summary,
+                    payload={
+                        "active_serotonergic_meds": unique_drugs,
+                        "non_diagnostic_observational_scope": True,
+                    },
+                    safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+                )
+            )
+
     return findings, emergencies, routines
 
 
@@ -957,7 +1032,12 @@ def _dispatch_care_graph_packets(
         return ()
 
     packets: list[CareGraphPacket] = []
-    pv_banner = NON_PRESCRIPTIVE_CLINICIAN_BANNER if iatrogenic_findings else None
+    any_alert_banner = any(
+        a.safety_banner is not None for a in (*emergency_alerts, *approved_routine)
+    )
+    pv_banner = (
+        NON_PRESCRIPTIVE_CLINICIAN_BANNER if (iatrogenic_findings or any_alert_banner) else None
+    )
 
     hands_on_all = [m for m in care_graph if m.role == CareRole.CO_RESIDENT_HANDS_ON]
     hands_on_duty = [m for m in hands_on_all if m.on_duty] or hands_on_all
@@ -996,7 +1076,11 @@ def _dispatch_care_graph_packets(
                             packet_kind="RESPITE_AND_MICRO_COACHING",
                             alert_codes=rt_codes,
                             max_read_seconds=45,
-                            summary="45s micro-coaching and shift-care update.",
+                            summary=(
+                                "45s micro-coaching and shift-care update. Optional caregiver-only "
+                                "respite: 12-min seated secular Kirtan Kriya or 0.1 Hz paced "
+                                "breathing (for caregiver stress relief only, not patient care)."
+                            ),
                             safety_banner=pv_banner,
                         )
                     )
@@ -1026,7 +1110,9 @@ def _dispatch_care_graph_packets(
                         max_read_seconds=45,
                         summary=(
                             f"45s micro-coaching: greet in {profile.mother_tongue_l1} and "
-                            f"offer 2h evening tea respite rotation."
+                            f"offer 2h evening tea respite rotation. Optional caregiver-only "
+                            f"respite: 12-min seated secular Kirtan Kriya or 0.1 Hz paced "
+                            f"breathing (for caregiver stress relief only)."
                         ),
                     )
                 )
@@ -1096,6 +1182,125 @@ def _dispatch_care_graph_packets(
                 )
 
     return tuple(packets)
+
+
+def _evaluate_contemplative_sentinel_guards(
+    *,
+    rollups: Sequence[DailyRollup],
+    current: DailyRollup,
+    ev_ids: tuple[str, ...],
+    z_hr: float,
+    z_rmssd: float,
+) -> tuple[
+    frozenset[ContemplativeVulnerabilityFlag],
+    list[CareGraphAlertEffect],
+    list[CareGraphAlertEffect],
+]:
+    emergencies: list[CareGraphAlertEffect] = []
+    routines: list[CareGraphAlertEffect] = []
+
+    sleep_deprivation_48h = (
+        len(rollups) >= 2
+        and rollups[-1].nocturnal_sleep_hours < 4.0
+        and rollups[-2].nocturnal_sleep_hours < 4.0
+    )
+    active_vulns: frozenset[ContemplativeVulnerabilityFlag] = (
+        frozenset({ContemplativeVulnerabilityFlag.SLEEP_DEPRIVATION_48H})
+        if sleep_deprivation_48h
+        else frozenset()
+    )
+    if sleep_deprivation_48h:
+        hyperarousal_concordant = (
+            current.somatic_hyperarousal_events_count > 0
+            or z_hr >= 2.0
+            or current.nocturnal_hr_bpm > 100.0
+            or z_rmssd <= -2.0
+            or current.nocturnal_rr_bpm > 22.0
+        )
+        if hyperarousal_concordant:
+            emergencies.append(
+                CareGraphAlertEffect(
+                    tier=ActionTier.TIER_3_CLINICAL_EMERGENCY,
+                    target_roles=(
+                        CareRole.CO_RESIDENT_HANDS_ON,
+                        CareRole.VISITING_CLINICIAN,
+                        CareRole.REMOTE_DIASPORA_COSIGNER,
+                    ),
+                    alert_code="CONTEMPLATIVE_INSOMNIA_48H_HYPERAROUSAL",
+                    evidence_ids=ev_ids,
+                    summary=(
+                        f"Sustained >= 48h sleep deprivation "
+                        f"({rollups[-2].nocturnal_sleep_hours:.1f}h, "
+                        f"{current.nocturnal_sleep_hours:.1f}h) concordant with somatic or "
+                        f"autonomic hyperarousal (HR {current.nocturnal_hr_bpm:.1f} bpm, "
+                        f"z={z_hr:+.2f}); urgent human clinical review recommended to rule "
+                        f"out mania, psychosis, or delirium."
+                    ),
+                    payload={
+                        "nocturnal_sleep_hours_48h": [
+                            rollups[-2].nocturnal_sleep_hours,
+                            current.nocturnal_sleep_hours,
+                        ],
+                        "somatic_hyperarousal_events_count": (
+                            current.somatic_hyperarousal_events_count
+                        ),
+                        "non_diagnostic_observational_scope": True,
+                    },
+                    safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+                )
+            )
+        else:
+            routines.append(
+                CareGraphAlertEffect(
+                    tier=ActionTier.TIER_1_ROUTINE,
+                    target_roles=(
+                        CareRole.CO_RESIDENT_HANDS_ON,
+                        CareRole.CO_RESIDENT_SECONDARY,
+                        CareRole.VISITING_CLINICIAN,
+                    ),
+                    alert_code="SLEEP_DEPRIVATION_48H_GUARD",
+                    evidence_ids=ev_ids,
+                    summary=(
+                        f"Two consecutive nights < 4h sleep "
+                        f"({rollups[-2].nocturnal_sleep_hours:.1f}h, "
+                        f"{current.nocturnal_sleep_hours:.1f}h); contemplative protocols "
+                        f"downgraded to caution-gated pending caregiver/clinician review."
+                    ),
+                    safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+                )
+            )
+
+    crisis_flag_tokens = {f.strip().lower() for f in current.reported_crisis_red_flags}
+    if current.sustained_immobility_unresponsive_minutes >= 15.0 or bool(
+        crisis_flag_tokens & {"catatonia", "mutism", "stiffness"}
+    ):
+        emergencies.append(
+            CareGraphAlertEffect(
+                tier=ActionTier.TIER_3_CLINICAL_EMERGENCY,
+                target_roles=(
+                    CareRole.CO_RESIDENT_HANDS_ON,
+                    CareRole.VISITING_CLINICIAN,
+                    CareRole.REMOTE_DIASPORA_COSIGNER,
+                ),
+                alert_code="UNRESPONSIVE_STUPOR_OR_CATATONIA_ALERT",
+                evidence_ids=ev_ids,
+                summary=(
+                    f"Sustained unresponsive immobility or catatonic cues detected "
+                    f"({current.sustained_immobility_unresponsive_minutes:.1f} min); urgent "
+                    f"human medical evaluation recommended to rule out stupor, hypoactive "
+                    f"delirium, stroke, or catatonia."
+                ),
+                payload={
+                    "sustained_immobility_unresponsive_minutes": (
+                        current.sustained_immobility_unresponsive_minutes
+                    ),
+                    "non_diagnostic_observational_scope": True,
+                },
+                safety_banner=NON_PRESCRIPTIVE_CLINICIAN_BANNER,
+            )
+        )
+
+    return active_vulns, emergencies, routines
 
 
 class ClinicalSentinelCron:
@@ -1366,9 +1571,23 @@ class ClinicalSentinelCron:
             medications=medications,
             ev_ids=ev_ids,
             concordant_uti_active=(plane_urinary and plane_autonomic_thermal),
+            z_temp=z_temp,
+            z_hr=z_hr,
         )
         emergency_alerts.extend(pv_emergencies)
         routine_candidates.extend(pv_routines)
+
+        active_contemplative_vulns, contemp_emergencies, contemp_routines = (
+            _evaluate_contemplative_sentinel_guards(
+                rollups=rollups,
+                current=current,
+                ev_ids=ev_ids,
+                z_hr=z_hr,
+                z_rmssd=z_rmssd,
+            )
+        )
+        emergency_alerts.extend(contemp_emergencies)
+        routine_candidates.extend(contemp_routines)
 
         delirium_shield = bool(vulnerability_flags) or (plane_urinary and plane_autonomic_thermal)
         t_help = T_HELP_DELIRIUM_PROTOCOLS if delirium_shield else ()
@@ -1490,6 +1709,7 @@ class ClinicalSentinelCron:
             recommended_proactive_language=rec_lang,
             objective_informant_discordance=objective_discordance,
             care_graph_packets=packets,
+            active_contemplative_vulnerabilities=active_contemplative_vulns,
             next_state=next_state,
             next_wakeup_seconds=next_wakeup,
         )
