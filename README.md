@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/TinkeringDao/CiMind/actions/workflows/ci.yml/badge.svg)](https://github.com/TinkeringDao/CiMind/actions/workflows/ci.yml)
 [![Security](https://github.com/TinkeringDao/CiMind/actions/workflows/security.yml/badge.svg)](https://github.com/TinkeringDao/CiMind/actions/workflows/security.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24504102.svg)](https://doi.org/10.5281/zenodo.24504102)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24593980.svg)](https://doi.org/10.5281/zenodo.24593980)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Local-first, zero-cloud, auditable cognitive prosthetic and ambient-safety kernel for dementia and mild cognitive impairment (MCI) assistive-living research across Reisberg functional stages (`GDS 1–7`).
 
-`CiMind` (`TinkeringDao Labs` — [`tinkeringdao.dev/research/cimind/`](https://tinkeringdao.dev/research/cimind/)) treats any local language model strictly as an untrusted reasoning coprocessor behind deterministic Python verification seams. Life-safety reflexes, epistemic memory boundaries, stage-adaptive dialogue rules, commerce velocity caps, and longitudinal observational baselines execute in pure, offline-verifiable Python (`3.11+` standard library only; zero third-party runtime dependencies) backed by an append-only SHA-256 hash-chained SQLite audit ledger. For full primary-source clinical and engineering citations (`PMID`, `NCT`, `CIE S 026`, `arXiv`) and the `v0.2.0` kernel-vs-adapter boundary matrix, see [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md).
+`CiMind` (`TinkeringDao Labs` — [`tinkeringdao.dev/research/cimind/`](https://tinkeringdao.dev/research/cimind/)) treats any local language model strictly as an untrusted reasoning coprocessor behind deterministic Python verification seams. Life-safety reflexes, epistemic memory boundaries, stage-adaptive dialogue rules, commerce velocity caps, and longitudinal observational baselines execute in pure, offline-verifiable Python (`3.11+` standard library only; zero third-party runtime dependencies) backed by an append-only SHA-256 hash-chained SQLite audit ledger. For full primary-source clinical and engineering citations (`PMID`, `NCT`, `CIE S 026`, `arXiv`) and the `v0.3.0` kernel-vs-adapter boundary matrix, see [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md).
 
 ---
 
@@ -209,7 +209,7 @@ Importing or running `cimind` opens zero unsolicited network sockets and require
 | [`src/cimind/sentinel.py`](src/cimind/sentinel.py) | Pure `ClinicalSentinelCron` (`21d` `Median/MAD`, `PV-1..PV-7`, `48h` sleep & stupor/catatonia guards, `COAST-6`, `t-HELP`, `Household Care Graph` routing) |
 | [`src/cimind/appliance.py`](src/cimind/appliance.py) | Top-level `CiMindAppliance` coordinator |
 | [`src/cimind/cli.py`](src/cimind/cli.py) | Offline diagnostic CLI (`doctor`, `circadian`, `reflex`, `sentinel`, `concierge`, `geotrigger`) |
-| [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md) | Primary-source clinical & engineering evidence matrix (`PMID` / `NCT` / `CIE S 026` / `arXiv`), non-MDR scope, and `v0.2.0` kernel-vs-adapter truth table |
+| [`docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md`](docs/CLINICAL_AND_SYSTEMS_EVIDENCE_RATIONALE.md) | Primary-source clinical & engineering evidence matrix (`PMID` / `NCT` / `CIE S 026` / `arXiv`), non-MDR scope, and `v0.3.0` kernel-vs-adapter truth table |
 | [`docs/HINDSIGHT_HEALTHCARE_EXTENSION.md`](docs/HINDSIGHT_HEALTHCARE_EXTENSION.md) | Hindsight `v1` Healthcare Bank Template import guide and `CiMindOperationValidator` extension configuration |
 | [`docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md`](docs/LORAWAN_GEOTRIGGER_ARCHITECTURE.md) | Private LoRaWAN + `Reachy Mini` perimeter safety reference architecture |
 | [`blueprints/homeassistant/circadian_sundowning_guard.yaml`](blueprints/homeassistant/circadian_sundowning_guard.yaml) | Local Home Assistant circadian lighting & sundowning de-escalation blueprint |

@@ -50,7 +50,7 @@ def _sign(
 
 
 def test_appliance_end_to_end_reflex_companion_concierge_and_sentinel_star_flows() -> None:
-    assert cimind.__version__ == "0.2.0"
+    assert cimind.__version__ == "0.3.0"
     secret = b"family-cosigner-secret"
     profile = PatientCareProfile(
         patient_id="pat-e2e-01",
