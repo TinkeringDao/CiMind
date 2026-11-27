@@ -20,8 +20,14 @@ from cimind.audit import AuditLedger
 from cimind.domain import (
     BEREAVEMENT_TERMS,
     ORAL_INTAKE_TERMS,
+    QUARANTINE_AND_UNTRUSTED_EXCLUSION_TAGS,
+    UNTRUSTED_EXTERNAL_CORPUS_TAGS,
     EpistemicProvenance,
+    bank_matches_allowed_prefixes,
+    classify_epistemic_corpus_violation,
     contains_clinical_term,
+    has_contemplative_crisis_metaphysics,
+    has_somatic_or_contemplative_crisis_cues,
     passes_broadcast_speech_quarantine,
 )
 from cimind.hindsight import CareEpisodicEvent
@@ -272,12 +278,28 @@ _FORGED_PRIVILEGED_TAGS = frozenset(
         EpistemicProvenance.TAG_ZONE3_SENSOR.value,
     }
 )
+_CROSS_BANK_MEMORY_TAG_PATTERN = re.compile(r"<\s*/?\s*hindsight_memory\b", re.IGNORECASE)
+_FOREIGN_SOURCE_BANK_PATTERN = re.compile(r"\bsource\s*:\s*([a-z0-9_-]+)/", re.IGNORECASE)
+_SYNTHETIC_TEST_OR_HEARTBEAT_PATTERN = re.compile(
+    r"\b(?:"
+    r"health(?:_[a-z0-9]+)*_ok"
+    r"|hypothetical\s+guardrail\s+evaluation"
+    r"|synthetic_test_scenario"
+    r"|guardrail_eval_fixture"
+    r"|synthetic\s+(?:eval|evaluation|heartbeat|probe)\s+(?:scenario|fixture|payload)"
+    r")\b",
+    re.IGNORECASE,
+)
+_UNTRUSTED_EXTERNAL_CONTEXT_PATTERN = re.compile(
+    r"\b(?:youtube|transcript|channel|video_id|exported_chat)\s*:",
+    re.IGNORECASE,
+)
+_SPEECH_DISALLOWED_EXTERNAL_TAGS = UNTRUSTED_EXTERNAL_CORPUS_TAGS - {
+    EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value
+}
 _QUARANTINE_EXCLUSION_GROUP: dict[str, Any] = {
     "not": {
-        "tags": [
-            EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
-            EpistemicProvenance.TAG_TRUTH_FALSE.value,
-        ],
+        "tags": list(QUARANTINE_AND_UNTRUSTED_EXCLUSION_TAGS),
         "match": "any_strict",
     }
 }
@@ -355,6 +377,12 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
         self.healthcare_banks = _parse_csv_set(normalized_cfg.get("healthcare_banks", "*"))
         self.tag_scoped_banks = _parse_csv_set(normalized_cfg.get("tag_scoped_banks", ""))
         self.admin_api_keys = _parse_csv_set(normalized_cfg.get("admin_api_keys", ""))
+        self.strict_corpus_firewall = _parse_bool_flag(
+            normalized_cfg.get("strict_corpus_firewall", "true")
+        )
+        self.allowed_bank_prefixes = _parse_csv_set(
+            normalized_cfg.get("allowed_bank_prefixes", "cimind")
+        )
         self._audit_ledger = audit_ledger
 
     def _reject(
@@ -409,6 +437,34 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
             return True
         return _PATIENT_ORAL_PROMPT_DIRECTIVE.search(text) is not None
 
+    def _has_cross_bank_prompt_echo(self, content: str, context: str) -> bool:
+        for text in (content, context):
+            if not text:
+                continue
+            if _CROSS_BANK_MEMORY_TAG_PATTERN.search(text) is not None:
+                return True
+            for match in _FOREIGN_SOURCE_BANK_PATTERN.finditer(text):
+                if not bank_matches_allowed_prefixes(match.group(1), self.allowed_bank_prefixes):
+                    return True
+        return False
+
+    @staticmethod
+    def _has_synthetic_test_or_heartbeat(
+        content: str,
+        context: str,
+        tags: list[str],
+    ) -> bool:
+        combined = f"{content}\n{context}\n{' '.join(tags)}"
+        return _SYNTHETIC_TEST_OR_HEARTBEAT_PATTERN.search(combined) is not None
+
+    @staticmethod
+    def _has_signed_provenance(raw_context: str, raw_tags: list[str]) -> bool:
+        return (
+            raw_context.startswith(EpistemicProvenance.CONTEXT_VERIFIED_BIO.value)
+            or raw_context.startswith(EpistemicProvenance.CONTEXT_CLINICAL_VAULT.value)
+            or EpistemicProvenance.TAG_SIGNED_VERIFIED.value in raw_tags
+        )
+
     async def validate_retain(self, ctx: RetainContext) -> ValidationResult:
         if not ctx.contents:
             return self._reject(
@@ -428,19 +484,64 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
             raw_tags = [str(t) for t in (item.get("tags") or ())]
             parsed_obj = self._try_parse_json_object(raw_content)
 
+            if self._has_cross_bank_prompt_echo(raw_content, raw_context):
+                return self._reject(
+                    action_type="HINDSIGHT_VALIDATE_RETAIN",
+                    rule_id="RULE_CROSS_BANK_PROMPT_ECHO_BLOCKED",
+                    bank_id=ctx.bank_id,
+                    message=(
+                        "Cross-bank <hindsight_memory> prompt-echo blocks and foreign "
+                        "bank provenance headers are forbidden."
+                    ),
+                    status_code=403,
+                )
+
+            if self._has_synthetic_test_or_heartbeat(raw_content, raw_context, raw_tags):
+                return self._reject(
+                    action_type="HINDSIGHT_VALIDATE_RETAIN",
+                    rule_id="RULE_SYNTHETIC_TEST_SCENARIO_BLOCKED",
+                    bank_id=ctx.bank_id,
+                    message=(
+                        "Synthetic health-check heartbeats and hypothetical guardrail "
+                        "evaluation scenarios may not be retained."
+                    ),
+                    status_code=422,
+                )
+
+            is_speech_item = (
+                ctx.bank_id in self.quarantine_banks
+                or raw_context.startswith(EpistemicProvenance.CONTEXT_QUARANTINE.value)
+                or (parsed_obj is not None and "speaker_role" in parsed_obj)
+            )
+            disallowed_tags = (
+                _SPEECH_DISALLOWED_EXTERNAL_TAGS
+                if is_speech_item
+                else UNTRUSTED_EXTERNAL_CORPUS_TAGS
+            )
+            if (
+                any(tag.strip().lower() in disallowed_tags for tag in raw_tags)
+                or _UNTRUSTED_EXTERNAL_CONTEXT_PATTERN.search(raw_context) is not None
+            ):
+                return self._reject(
+                    action_type="HINDSIGHT_VALIDATE_RETAIN",
+                    rule_id="RULE_UNVERIFIED_EXTERNAL_CORPUS_BLOCKED",
+                    bank_id=ctx.bank_id,
+                    message=(
+                        "Untrusted external corpus tags and third-party media transcripts "
+                        "are rejected across all care banks."
+                    ),
+                    status_code=403,
+                )
+
             has_quarantine_marker = (
                 EpistemicProvenance.TAG_ZONE4_QUARANTINE.value in raw_tags
                 or EpistemicProvenance.TAG_TRUTH_FALSE.value in raw_tags
                 or raw_context.startswith(EpistemicProvenance.CONTEXT_QUARANTINE.value)
                 or EpistemicProvenance.QUARANTINE_XML_OPEN.value in raw_content
             )
+            has_signed_provenance = self._has_signed_provenance(raw_context, raw_tags)
 
             if ctx.bank_id in self.protected_clinical_banks:
-                has_signed_provenance = (
-                    raw_context.startswith(EpistemicProvenance.CONTEXT_VERIFIED_BIO.value)
-                    or raw_context.startswith(EpistemicProvenance.CONTEXT_CLINICAL_VAULT.value)
-                    or EpistemicProvenance.TAG_SIGNED_VERIFIED.value in raw_tags
-                )
                 if has_quarantine_marker or not has_signed_provenance:
                     return self._reject(
                         action_type="HINDSIGHT_VALIDATE_RETAIN",
@@ -452,12 +553,20 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                         ),
                         status_code=403,
                     )
+                if classify_epistemic_corpus_violation(raw_content) is not None:
+                    return self._reject(
+                        action_type="HINDSIGHT_VALIDATE_RETAIN",
+                        rule_id="RULE_UNVERIFIED_EXTERNAL_CORPUS_BLOCKED",
+                        bank_id=ctx.bank_id,
+                        message=(
+                            "Protected clinical bank rejected unverified esoteric, molecular-myth, "
+                            "or contemplative-hazard content."
+                        ),
+                        status_code=403,
+                    )
+                enriched_contents.append(dict(item))
+                continue
 
-            is_speech_item = (
-                ctx.bank_id in self.quarantine_banks
-                or raw_context.startswith(EpistemicProvenance.CONTEXT_QUARANTINE.value)
-                or (parsed_obj is not None and "speaker_role" in parsed_obj)
-            )
             if is_speech_item:
                 if parsed_obj is not None:
                     try:
@@ -501,6 +610,7 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                             message="Speech item failed 4-gate VAD/SNR/broadcast-media quarantine.",
                             status_code=422,
                         )
+                    speech_text = transcript
                 elif not raw_content.strip():
                     return self._reject(
                         action_type="HINDSIGHT_VALIDATE_RETAIN",
@@ -509,13 +619,22 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                         message="Quarantined speech transcript cannot be empty.",
                         status_code=422,
                     )
+                else:
+                    speech_text = raw_content
+
+                injected_speech_tags: tuple[str, ...] = (
+                    EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
+                    EpistemicProvenance.TAG_TRUTH_FALSE.value,
+                )
+                if has_somatic_or_contemplative_crisis_cues(speech_text):
+                    injected_speech_tags = (
+                        *injected_speech_tags,
+                        EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value,
+                    )
 
                 new_tags = _merge_unique_tags(
                     raw_tags,
-                    (
-                        EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
-                        EpistemicProvenance.TAG_TRUTH_FALSE.value,
-                    ),
+                    injected_speech_tags,
                     strip=_FORGED_PRIVILEGED_TAGS,
                 )
                 updated_item = dict(item)
@@ -523,6 +642,21 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                 enriched_contents.append(updated_item)
                 mutated = True
                 continue
+
+            if (
+                ctx.bank_id in self.sensor_episode_banks
+                or self._applies_to_healthcare_bank(ctx.bank_id)
+            ) and classify_epistemic_corpus_violation(raw_content) is not None:
+                return self._reject(
+                    action_type="HINDSIGHT_VALIDATE_RETAIN",
+                    rule_id="RULE_UNVERIFIED_EXTERNAL_CORPUS_BLOCKED",
+                    bank_id=ctx.bank_id,
+                    message=(
+                        "Unverified esoteric assertions, falsified molecular myths, and "
+                        "contemplative hazards are rejected from care banks."
+                    ),
+                    status_code=403,
+                )
 
             episode = CareEpisodicEvent.from_hindsight_text(raw_content)
             if ctx.bank_id in self.sensor_episode_banks or episode is not None:
@@ -557,6 +691,20 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                 enriched_contents.append(updated_item)
                 mutated = True
                 continue
+
+            if self.strict_corpus_firewall and self._applies_to_healthcare_bank(ctx.bank_id):
+                if has_quarantine_marker or not has_signed_provenance:
+                    return self._reject(
+                        action_type="HINDSIGHT_VALIDATE_RETAIN",
+                        rule_id="RULE_UNVERIFIED_EXTERNAL_CORPUS_BLOCKED",
+                        bank_id=ctx.bank_id,
+                        message=(
+                            "Strict corpus firewall blocks bare untagged writes into "
+                            f"healthcare bank '{ctx.bank_id}'; signed provenance, structured "
+                            "sensor episode, or 4-gate quarantined speech is required."
+                        ),
+                        status_code=403,
+                    )
 
             enriched_contents.append(dict(item))
 
@@ -670,6 +818,21 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                 status_code=403,
             )
 
+        corpus_violation = classify_epistemic_corpus_violation(combined_text)
+        if corpus_violation is not None:
+            rule_id, _bucket = corpus_violation
+            return self._reject(
+                action_type="HINDSIGHT_VALIDATE_REFLECT",
+                rule_id=rule_id,
+                bank_id=ctx.bank_id,
+                message=(
+                    "Reflect query blocked by deterministic epistemic corpus and "
+                    "contemplative safety firewall."
+                ),
+                status_code=403,
+                retry=False,
+            )
+
         return _ActiveValidationResult.accept()
 
     async def validate_memory_update(self, ctx: MemoryUpdateContext) -> ValidationResult:
@@ -732,6 +895,50 @@ class CiMindOperationValidator(_ActiveValidatorBase):  # type: ignore[misc]
                 rule_id="RULE_GDS7_DYSPHAGIA_IN_MENTAL_MODEL",
                 bank_id=ctx.bank_id,
                 message="Candidate mental model contains prohibited oral intake prompts.",
+                status_code=422,
+                retry=True,
+            )
+        if EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value in candidate:
+            return self._reject(
+                action_type="HINDSIGHT_VALIDATE_MENTAL_MODEL_CANDIDATE",
+                rule_id="RULE_CONTEMPLATIVE_CRISIS_LEAK_IN_MENTAL_MODEL",
+                bank_id=ctx.bank_id,
+                message=(
+                    "Candidate mental model leaked quarantined contemplative crisis metadata; "
+                    "redraft strictly from verified clinical/biographical/sensor facts."
+                ),
+                status_code=422,
+                retry=True,
+            )
+        corpus_violation = classify_epistemic_corpus_violation(candidate)
+        if corpus_violation is not None:
+            rule_id, _bucket = corpus_violation
+            mm_rule_id = (
+                "RULE_SUPERNATURAL_COLLUSION_IN_MENTAL_MODEL"
+                if rule_id == "RULE_ZERO_SUPERNATURAL_COLLUSION_OR_REDFLAG_MASKING"
+                else "RULE_ESOTERIC_OR_HAZARD_LEAK_IN_MENTAL_MODEL"
+            )
+            return self._reject(
+                action_type="HINDSIGHT_VALIDATE_MENTAL_MODEL_CANDIDATE",
+                rule_id=mm_rule_id,
+                bank_id=ctx.bank_id,
+                message=(
+                    "Candidate mental model contains unverified esoteric claims, "
+                    "contemplative hazards, supernatural collusion, or unscreened "
+                    "supplement/anti-medication advice; redraft from verified facts only."
+                ),
+                status_code=422,
+                retry=True,
+            )
+        if has_contemplative_crisis_metaphysics(candidate):
+            return self._reject(
+                action_type="HINDSIGHT_VALIDATE_MENTAL_MODEL_CANDIDATE",
+                rule_id="RULE_CONTEMPLATIVE_CRISIS_LEAK_IN_MENTAL_MODEL",
+                bank_id=ctx.bank_id,
+                message=(
+                    "Candidate mental model leaked unverified contemplative crisis metaphysics; "
+                    "redraft from verified clinical/biographical/sensor facts only."
+                ),
                 status_code=422,
                 retry=True,
             )

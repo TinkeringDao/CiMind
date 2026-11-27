@@ -25,6 +25,7 @@ from cimind import (
     load_healthcare_bank_template,
     validate_bank_template_manifest,
 )
+from cimind.domain import QUARANTINE_AND_UNTRUSTED_EXCLUSION_TAGS
 from cimind.hindsight import BANK_TEMPLATE_CONFIG_KEYS
 from cimind.hindsight_validator import (
     MemoryUpdateContext,
@@ -112,7 +113,7 @@ def test_healthcare_bank_template_conforms_to_hindsight_v1_schema_and_imports_cl
     assert dry_resp["dry_run"] is True
     assert live_resp["config_applied"] is True
     assert len(live_resp["mental_models_created"]) == 3
-    assert len(live_resp["directives_created"]) == 5
+    assert len(live_resp["directives_created"]) >= 7
     assert ledger.verify_chain().valid is True
     ledger.close()
 
@@ -319,10 +320,7 @@ def test_validator_recall_tag_scope_reflect_curation_and_mental_model_safety_gat
 
     expected_not = {
         "not": {
-            "tags": [
-                EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
-                EpistemicProvenance.TAG_TRUTH_FALSE.value,
-            ],
+            "tags": list(QUARANTINE_AND_UNTRUSTED_EXCLUSION_TAGS),
             "match": "any_strict",
         }
     }

@@ -14,7 +14,6 @@ from typing import Any, Literal, Protocol
 
 from cimind.audit import AuditEntry, AuditLedger, AuditVerificationReport
 from cimind.domain import (
-    GERIATRIC_DRUG_CATALOG,
     EpistemicProvenance,
     EpistemicViolationError,
     EpistemicZone,
@@ -22,8 +21,12 @@ from cimind.domain import (
     PatientCareProfile,
     StorageIntegrityError,
     UnobservedModalitiesHeader,
+    has_somatic_or_contemplative_crisis_cues,
+    is_cyp3a4_inducer_medication,
+    is_serotonergic_medication,
     parse_iso_utc,
     passes_broadcast_speech_quarantine,
+    resolve_drug_spec,
 )
 from cimind.hindsight import CareEpisodicEvent, TemporalVerificationResult
 
@@ -62,6 +65,7 @@ class InMemoryHindsightAdapter:
                     "text": it.get("content", ""),
                     "context": it.get("context", ""),
                     "timestamp": it.get("timestamp", ""),
+                    "tags": list(it.get("tags") or ()),
                 }
             )
         return {"retained": len(items), "async": async_retain}
@@ -148,6 +152,7 @@ class DiarizedSpeechObservation:
     word_finding_pause_ms: int = 0
     voice_activity_detected: bool = True
     sensor_id: str = "omi-pendant-01"
+    extra_tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -176,6 +181,7 @@ class EpistemicContextBundle:
     orders_24h_count: int
     unobserved_modalities: UnobservedModalitiesHeader
     orders_7d_count: int = 0
+    contemplative_cooldown_until_utc: str | None = None
 
 
 class EpistemicMemoryMMU:
@@ -244,6 +250,16 @@ class EpistemicMemoryMMU:
                 )
                 """
             )
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS contemplative_safety_cooldowns (
+                    patient_id TEXT PRIMARY KEY,
+                    cooldown_until_utc TEXT NOT NULL,
+                    trigger_reason TEXT NOT NULL,
+                    set_at_utc TEXT NOT NULL
+                )
+                """
+            )
 
     def close(self) -> None:
         self._ledger.close()
@@ -293,9 +309,8 @@ class EpistemicMemoryMMU:
         return tuple(result)
 
     @staticmethod
-    def _resolve_med_metadata(med_payload: dict[str, Any]) -> tuple[str, int, bool]:
-        drug_key = str(med_payload.get("drug_name", "")).strip().lower()
-        cat = GERIATRIC_DRUG_CATALOG.get(drug_key)
+    def _resolve_med_metadata(med_payload: dict[str, Any]) -> tuple[str, int, bool, bool, bool]:
+        cat = resolve_drug_spec(med_payload)
         drug_class = str(
             med_payload.get("drug_class") or (cat.drug_class if cat is not None else "")
         ).upper()
@@ -303,12 +318,14 @@ class EpistemicMemoryMMU:
         acb_score = int(acb_raw) if acb_raw is not None else (cat.acb_score if cat else 0)
         d2_raw = med_payload.get("is_d2_antagonist")
         is_d2 = bool(d2_raw) if d2_raw is not None else (cat.is_d2_antagonist if cat else False)
-        return drug_class, acb_score, is_d2
+        is_sero = is_serotonergic_medication(med_payload)
+        is_cyp3a4 = is_cyp3a4_inducer_medication(med_payload)
+        return drug_class, acb_score, is_d2, is_sero, is_cyp3a4
 
     def _screen_medication_intake(self, med_payload: dict[str, Any]) -> tuple[str, ...]:
         warnings: list[str] = []
         profile = self._active_profile_or_none()
-        drug_class, acb_new, is_d2 = self._resolve_med_metadata(med_payload)
+        drug_class, acb_new, is_d2, is_sero, is_cyp3a4 = self._resolve_med_metadata(med_payload)
 
         if profile is not None and PathologyFlag.LEWY_BODY in profile.pathologies and is_d2:
             warnings.append("DLB_D2_ANTAGONIST_CONTRAINDICATED")
@@ -326,6 +343,14 @@ class EpistemicMemoryMMU:
             and acb_new >= 2
         ):
             warnings.append("CHEI_TO_ANTIMUSCARINIC_PRESCRIBING_CASCADE")
+
+        if is_sero and any(meta[3] for meta in existing_meta):
+            warnings.append("SEROTONERGIC_POLYPHARMACY_RISK")
+
+        if (is_cyp3a4 and len(existing_meds) >= 1) or (
+            not is_cyp3a4 and any(meta[4] for meta in existing_meta)
+        ):
+            warnings.append("CYP3A4_HERBAL_INTERACTION_RISK")
 
         return tuple(warnings)
 
@@ -504,6 +529,20 @@ class EpistemicMemoryMMU:
             "timestamp_utc": observation.timestamp_utc,
         }
         ctx_tag = f"cimind:quarantine:{observation.speaker_role}:{observation.detected_language}"
+        speech_tags: list[str] = [
+            EpistemicProvenance.TAG_ZONE4_QUARANTINE.value,
+            EpistemicProvenance.TAG_TRUTH_FALSE.value,
+        ]
+        for extra in observation.extra_tags:
+            cleaned = str(extra).strip()
+            if cleaned and cleaned not in speech_tags:
+                speech_tags.append(cleaned)
+        if (
+            has_somatic_or_contemplative_crisis_cues(observation.transcript)
+            and EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value not in speech_tags
+        ):
+            speech_tags.append(EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value)
+
         self._hindsight.retain(
             self.BANK_PATIENT_QUARANTINE,
             [
@@ -511,6 +550,7 @@ class EpistemicMemoryMMU:
                     "content": json.dumps(envelope, sort_keys=True),
                     "context": ctx_tag,
                     "timestamp": observation.timestamp_utc,
+                    "tags": speech_tags,
                 }
             ],
         )
@@ -590,6 +630,120 @@ class EpistemicMemoryMMU:
     def rolling_commerce_orders_7d(self, now_utc: str) -> int:
         """Return durable 7-day order count from SQLite commerce_velocity_ledger."""
         return self._commerce_velocity_window(now_utc)[3]
+
+    @staticmethod
+    def build_cooldown_clear_canonical_bytes(*, patient_id: str, now_utc: str) -> bytes:
+        """Build deterministic signing payload for caregiver/clinician cooldown clearance."""
+        return json.dumps(
+            {
+                "action": "CLEAR_CONTEMPLATIVE_COOLDOWN",
+                "now_utc": now_utc,
+                "patient_id": patient_id,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    def set_contemplative_cooldown(
+        self,
+        *,
+        patient_id: str,
+        now_utc: str,
+        hours: int = 72,
+        reason: str,
+    ) -> AuditEntry:
+        """Persist a durable post-crisis contemplative cooldown lockout in SQLite."""
+        pid = patient_id.strip()
+        if not pid:
+            raise ValueError("patient_id must be non-empty")
+        if hours <= 0:
+            raise ValueError("hours must be > 0")
+        clean_reason = reason.strip()
+        if not clean_reason:
+            raise ValueError("reason must be non-empty")
+
+        until_dt = parse_iso_utc(now_utc) + timedelta(hours=hours)
+        cooldown_until_utc = until_dt.isoformat().replace("+00:00", "Z")
+        with self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO contemplative_safety_cooldowns (
+                    patient_id, cooldown_until_utc, trigger_reason, set_at_utc
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(patient_id) DO UPDATE SET
+                    cooldown_until_utc = excluded.cooldown_until_utc,
+                    trigger_reason = excluded.trigger_reason,
+                    set_at_utc = excluded.set_at_utc
+                """,
+                (pid, cooldown_until_utc, clean_reason, now_utc),
+            )
+        return self._ledger.append(
+            actor_id="cimind-contemplative-safety",
+            action_type="CONTEMPLATIVE_COOLDOWN_SET",
+            evidence_ids=(pid,),
+            policy_rule_id="RULE_CONTEMPLATIVE_72H_COOLDOWN",
+            payload={
+                "patient_id": pid,
+                "hours": hours,
+                "cooldown_until_utc": cooldown_until_utc,
+                "reason": clean_reason,
+            },
+            result_status="COOLDOWN_ACTIVE",
+            timestamp_utc=now_utc,
+        )
+
+    def active_contemplative_cooldown_until(self, patient_id: str, now_utc: str) -> str | None:
+        """Return ISO-8601 UTC expiry timestamp if a contemplative cooldown is currently active."""
+        row = self._conn.execute(
+            "SELECT cooldown_until_utc FROM contemplative_safety_cooldowns WHERE patient_id = ?",
+            (patient_id.strip(),),
+        ).fetchone()
+        if row is None:
+            return None
+        until_utc = str(row["cooldown_until_utc"])
+        if parse_iso_utc(now_utc) < parse_iso_utc(until_utc):
+            return until_utc
+        return None
+
+    def clear_contemplative_cooldown(
+        self,
+        *,
+        mutation_actor_id: str,
+        patient_id: str,
+        now_utc: str,
+        signature_hex: str,
+    ) -> AuditEntry:
+        """Clear an active contemplative cooldown only with a verified cryptographic signature."""
+        pid = patient_id.strip()
+        canonical = self.build_cooldown_clear_canonical_bytes(patient_id=pid, now_utc=now_utc)
+        if not self.verify_signature(mutation_actor_id, canonical, signature_hex):
+            self._ledger.append(
+                actor_id=mutation_actor_id,
+                action_type="CONTEMPLATIVE_COOLDOWN_CLEAR_DENIED",
+                evidence_ids=(pid,),
+                policy_rule_id="RULE_EPISTEMIC_SIGNATURE_REQUIRED",
+                payload={"patient_id": pid},
+                result_status="DENIED",
+                timestamp_utc=now_utc,
+            )
+            raise EpistemicViolationError(
+                "Invalid or unauthorized cryptographic signature for cooldown clearance "
+                f"by actor '{mutation_actor_id}'."
+            )
+        with self._conn:
+            self._conn.execute(
+                "DELETE FROM contemplative_safety_cooldowns WHERE patient_id = ?",
+                (pid,),
+            )
+        return self._ledger.append(
+            actor_id=mutation_actor_id,
+            action_type="CONTEMPLATIVE_COOLDOWN_CLEARED",
+            evidence_ids=(pid,),
+            policy_rule_id="RULE_CONTEMPLATIVE_COOLDOWN_CLEARED",
+            payload={"patient_id": pid},
+            result_status="CLEARED",
+            timestamp_utc=now_utc,
+        )
 
     def verify_episode_in_window(
         self,
@@ -683,6 +837,9 @@ class EpistemicMemoryMMU:
         for q in quarantined_raw:
             raw_txt = str(q.get("text") or q.get("content") or "")
             ctx_val = str(q.get("context") or "")
+            q_tags = {str(t) for t in (q.get("tags") or ())}
+            if EpistemicProvenance.TAG_CONTEMPLATIVE_CRISIS_EVENT.value in q_tags:
+                continue
             if ctx_val and ":PATIENT:" not in ctx_val:
                 continue
             snippets.append(raw_txt)
@@ -705,6 +862,7 @@ class EpistemicMemoryMMU:
             + " | Assign zero evidentiary weight to unobserved planes."
         )
         spend_24h, spend_7d, orders_24h, orders_7d = self._commerce_velocity_window(now_utc)
+        cooldown_until = self.active_contemplative_cooldown_until(profile.patient_id, now_utc)
 
         return EpistemicContextBundle(
             profile=profile,
@@ -722,6 +880,7 @@ class EpistemicMemoryMMU:
                 offline_planes=offline,
                 prompt_directive=directive,
             ),
+            contemplative_cooldown_until_utc=cooldown_until,
         )
 
     def append_audit(
